@@ -4,9 +4,9 @@ import { FiUpload, FiFileText, FiX } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import { useTranslation } from "react-i18next";
-import { supabase } from "../supabaseClient";
+import { useUser } from "@clerk/clerk-react";
 import chatLogsService from "../services/chatLogsService";
-import { CHAT_API_BASE_URL, API_BASE_URL } from "../config";
+import { CHAT_API_BASE_URL } from "../config";
 import { useTTS } from "../hooks/useTTS";
 import {
   useUploadPdfForSummaryMutation,
@@ -30,6 +30,7 @@ export default function Summarizer() {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [selectedModel, setSelectedModel] = useState("uniguru"); // Fixed to UniGuru model
   const [userId, setUserId] = useState(null);
+  const { isSignedIn, user } = useUser();
   const fileInputRef = useRef(null);
   const streamingControllerRef = useRef(null);
   const navigate = useNavigate();
@@ -49,34 +50,9 @@ export default function Summarizer() {
 
   // Get user ID on component mount
   useEffect(() => {
-    const getUserId = async () => {
-      try {
-        // Get the current session
-        const { data: sessionData } = await supabase.auth.getSession();
-
-        // If we have a session with a user, use that ID
-        if (sessionData?.session?.user?.id) {
-          setUserId(sessionData.session.user.id);
-          return;
-        }
-
-        // Fallback to getUser if session doesn't have what we need
-        const { data: userData } = await supabase.auth.getUser();
-
-        if (userData?.user?.id) {
-          setUserId(userData.user.id);
-        } else {
-          // Use guest-user for anonymous users
-          setUserId("guest-user");
-        }
-      } catch (error) {
-        console.error("Error getting user ID:", error);
-        setUserId("guest-user");
-      }
-    };
-
-    getUserId();
-  }, []);
+    if (isSignedIn && user) setUserId(user.id);
+    else setUserId("guest-user");
+  }, [isSignedIn, user]);
 
   // Cleanup preview URL when file changes or component unmounts
   useEffect(() => {
@@ -280,10 +256,9 @@ export default function Summarizer() {
 
       toast.dismiss("upload-progress");
 
-      // Start streaming analysis using Base_backend (port 8000)
-      const streamUrl = isImage 
-        ? `${API_BASE_URL}/process-img-stream?llm=uniguru`
-        : `${API_BASE_URL}/process-pdf-stream?llm=uniguru`;
+      // Start streaming analysis using local backend
+      const streamEndpoint = isImage ? "/process-img-stream" : "/process-pdf-stream";
+      const streamUrl = `${CHAT_API_BASE_URL}${streamEndpoint}?llm=uniguru`;
 
       console.log(`🌊 Starting streaming ${isImage ? 'image' : 'document'} analysis:`, streamUrl);
 
@@ -325,14 +300,12 @@ export default function Summarizer() {
 
               // Filter out status messages and only accumulate actual content
               const isStatusMessage = content.includes('🔍') || content.includes('📄') ||
-                                    content.includes('🖼️') || content.includes('🤖') || content.includes('📝') ||
+                                    content.includes('🤖') || content.includes('📝') ||
                                     content.includes('✅') || content.includes('🎵') ||
                                     content.includes('[END]') || content.includes('[ERROR]') ||
-                                    content.includes('Starting document') || content.includes('Starting image') || content.includes('Processing:') ||
+                                    content.includes('Starting document') || content.includes('Processing:') ||
                                     content.includes('Using UNIGURU') || content.includes('Generating comprehensive') ||
-                                    content.includes('Document analysis complete') || content.includes('Image analysis complete') || 
-                                    content.includes('Audio summary available') || content.includes('Text extracted from image') ||
-                                    content.includes('Analysis Results') || content.includes('📖') || content.includes('📊');
+                                    content.includes('Document analysis complete') || content.includes('Audio summary available');
 
               // Add actual content, not status messages
               if (!isStatusMessage && content.trim()) {
@@ -358,7 +331,7 @@ export default function Summarizer() {
         name: file.name,
       }));
 
-      toast.success(`${isImage ? 'Image' : 'Document'} analysis complete!`, {
+      toast.success("Document analysis complete!", {
         icon: "🎉",
         position: "bottom-right",
         duration: 3000,
@@ -366,7 +339,7 @@ export default function Summarizer() {
 
       // Trigger TTS auto-play for the generated content
       if (ttsServiceHealthy && accumulatedContent.trim()) {
-        console.log(`🔊 ${isImage ? 'Image' : 'Document'} Summarizer: Triggering TTS auto-play`);
+        console.log("🔊 Document Summarizer: Triggering TTS auto-play");
 
         // Clean the content for better speech
         const cleanContent = accumulatedContent
@@ -384,7 +357,7 @@ export default function Summarizer() {
             delay: 1000,
             volume: 0.8
           }).catch(error => {
-            console.warn(`🔊 ${isImage ? 'Image' : 'Document'} Summarizer: TTS auto-play failed:`, error.message);
+            console.warn("🔊 Document Summarizer: TTS auto-play failed:", error.message);
           });
         }, 1500);
       }
@@ -504,7 +477,7 @@ export default function Summarizer() {
                 {/* Live Analysis Panel */}
                 <div className="bg-black/20 p-3 md:p-4 rounded-xl border border-white/10 flex flex-col h-full">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-white font-semibold">Live {file?.type?.startsWith("image/") ? "Image" : "Document"} Analysis</h3>
+                    <h3 className="text-white font-semibold">Live Document Analysis</h3>
                     <div className="flex items-center gap-2">
                       <span className="bg-[#FF9933]/20 px-2 py-0.5 rounded text-xs font-bold text-white/90">UniGuru</span>
                       {isStreaming && (
@@ -540,7 +513,7 @@ export default function Summarizer() {
                       <div className="flex items-center justify-center h-full">
                         <div className="text-center">
                           <div className="w-8 h-8 border-2 border-[#FF9933]/30 border-t-[#FF9933] rounded-full animate-spin mx-auto mb-4"></div>
-                          <p className="text-white/60">Preparing {file?.type?.startsWith("image/") ? "image" : "document"} analysis...</p>
+                          <p className="text-white/60">Preparing document analysis...</p>
                         </div>
                       </div>
                     )}

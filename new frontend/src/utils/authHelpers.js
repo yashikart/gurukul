@@ -1,6 +1,6 @@
-import { supabase } from "../supabaseClient";
 import { storage } from "./storageUtils";
 import { toast } from "react-hot-toast";
+import { useClerk } from "@clerk/clerk-react";
 
 /**
  * Thoroughly clears authentication data from storage while preserving avatar data
@@ -36,41 +36,8 @@ export const clearAuthData = () => {
  * @returns {Promise<boolean>} True if the user is deleted and was signed out, false otherwise
  */
 export const checkAndHandleDeletedAccount = async () => {
-  try {
-    // Get the current user
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    // If no user is logged in, nothing to do
-    if (!user) {
-      return false;
-    }
-
-    // Check if the user has been marked as deleted
-    if (user.user_metadata?.deleted === true) {
-      console.log("Detected deleted account, signing out user:", user.id);
-
-      // Sign out the user from all devices
-      await supabase.auth.signOut({ scope: "global" });
-
-      // Clear all auth data
-      clearAuthData();
-
-      // Notify the user
-      toast.error("This account has been deleted and cannot be used.", {
-        position: "top-right",
-        duration: 5000,
-      });
-
-      return true;
-    }
-
-    return false;
-  } catch (error) {
-    console.error("Error checking for deleted account:", error);
-    return false;
-  }
+  // With Clerk, account deletion is managed via Admin API; skip client check
+  return false;
 };
 
 /**

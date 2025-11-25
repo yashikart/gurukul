@@ -53,6 +53,8 @@ _allowed = os.getenv("ALLOWED_ORIGINS", "").strip()
 _allowed_list = [o.strip() for o in _allowed.split(",") if o.strip()] or [
     "http://localhost",
     "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5174",
 ]
 app.add_middleware(
     CORSMiddleware,

@@ -1,889 +1,602 @@
 """
-FastAPI application for the Financial Crew simulation using LangGraph.
-This replaces the CrewAI implementation in api_app.py.
-Integrated with MongoDB Atlas for persistent storage and learning from past simulations.
+Financial Simulator API using LangGraph
+Provides financial forecasting, simulation, and analysis capabilities
 """
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, File, UploadFile, Form, Depends
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from fastapi.responses import JSONResponse
-from typing import List, Dict, Any, Optional, Union
-import json
-import uvicorn
 import os
-import uuid
-import shutil
-from pathlib import Path
-import uvicorn
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-import agentops
-
-# Load environment variables from centralized configuration
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-from shared_config import load_shared_config
+import logging
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Any
+import pandas as pd
+import numpy as np
+import asyncio
+from pathlib import Path
 
-# Load centralized configuration
-load_shared_config("Financial_simulator")
+# FastAPI imports
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+import uvicorn
 
-from langgraph_implementation import simulate_timeline_langgraph
-from teacher_agent import run_teacher_agent, handle_pdf_upload, handle_pdf_removal
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Import MongoDB client
-from database.mongodb_client import save_chat_message
+# Add backend directory to path for imports
+backend_dir = Path(__file__).parent.parent.parent
+sys.path.append(str(backend_dir))
 
-# ************************************************FastAPI configuration************************************************************
-# Temporarily disable AgentOps to focus on core functionality
 try:
-    agentops.init(
-         api_key='4be58a32-e415-4142-82b7-834ae6b95422',
-         default_tags=['langgraph']
-    )
-    print("✅ AgentOps initialized successfully")
-except Exception as e:
-    print(f"⚠️ AgentOps initialization failed: {e}")
-    print("⚠️ Continuing without AgentOps...")
-app = FastAPI()
+    # Try to import advanced forecasting from orchestration
+    orchestration_dir = backend_dir / "orchestration" / "unified_orchestration_system"
+    sys.path.append(str(orchestration_dir))
+    
+    from enhanced_prophet_model import EnhancedProphetModel
+    from enhanced_arima_model import EnhancedARIMAModel
+    from smart_model_selector import SmartModelSelector
+    ADVANCED_FORECASTING = True
+    logger.info("Advanced forecasting models loaded successfully")
+except ImportError as e:
+    ADVANCED_FORECASTING = False
+    logger.warning(f"Advanced forecasting not available: {e}")
 
-# Add CORS middleware to handle OPTIONS requests
+# Pydantic models
+class FinancialProfile(BaseModel):
+    """Financial profile for simulation"""
+    name: str
+    monthly_income: float = Field(gt=0, description="Monthly income in currency units")
+    expenses: List[Dict[str, Any]] = Field(default_factory=list, description="List of expenses")
+    financial_goal: str = Field(description="Financial goal description")
+    financial_type: str = Field(default="Conservative", description="Investment style: Conservative, Moderate, Aggressive")
+    risk_level: str = Field(default="Low", description="Risk tolerance: Low, Medium, High")
+
+class SimulationRequest(BaseModel):
+    """Request for financial simulation"""
+    profile: FinancialProfile
+    simulation_months: int = Field(12, ge=1, le=120, description="Number of months to simulate")
+    user_id: Optional[str] = Field(None, description="User ID for tracking")
+
+class MarketData(BaseModel):
+    """Market data for forecasting"""
+    symbol: str = Field(description="Financial symbol or identifier")
+    data: List[Dict[str, Any]] = Field(description="Historical data points")
+    forecast_periods: int = Field(30, ge=1, le=365, description="Number of periods to forecast")
+
+class SimulationResponse(BaseModel):
+    """Response from financial simulation"""
+    status: str
+    simulation_id: str
+    results: Dict[str, Any]
+    recommendations: List[str]
+    timestamp: str
+
+class ForecastResponse(BaseModel):
+    """Response from financial forecasting"""
+    status: str
+    forecast_data: List[Dict[str, Any]]
+    model_used: str
+    accuracy_metrics: Dict[str, float]
+    summary: Dict[str, Any]
+    timestamp: str
+
+# FastAPI app
+app = FastAPI(
+    title="Financial Simulator API",
+    description="Financial forecasting, simulation, and analysis using LangGraph",
+    version="1.0.0"
+)
+
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For development; restrict in production
+    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Create a thread pool executor for running blocking operations
-executor = ThreadPoolExecutor(max_workers=5)
-
-# Store for simulation tasks and their status
-simulation_tasks = {}
-
-# Store for teacher agent tasks and their status
-teacher_tasks = {}
-
-# Define the expected schema for the incoming JSON
-class ExpenseItem(BaseModel):
-    name: str
-    amount: float
-
-class SimulationInput(BaseModel):
-    user_id: str
-    user_name: str
-    income: float
-    expenses: List[ExpenseItem]
-    total_expenses: float
-    goal: str
-    financial_type: str
-    risk_level: str
-
-class SimulateRequest(BaseModel):
-    n_months: int = 6  # Default to 6 months
-    simulation_unit: str = "Months"
-    user_inputs: dict
-    simulation_id: Optional[str] = None  # Optional simulation ID
-
-# Teacher agent models
-class TeacherQuery(BaseModel):
-    user_id: str
-    query: str
-    pdf_id: Optional[Union[str, List[str]]] = None  # Optional PDF ID(s) to search in specific PDF(s)
-    wait: Optional[bool] = False  # Whether to wait for the response or return immediately
-
-class TeacherResponse(BaseModel):
-    """Response model for the teacher agent endpoint"""
-    response: str
-    chat_history: Optional[List[Dict[str, str]]] = None
-    learning_task_id: Optional[str] = None  # Only use learning_task_id for clarity
-    status: Optional[str] = None
-
-def run_teacher_agent_background(task_id: str, user_id: str, query: str, chat_history: List[Dict[str, str]], pdf_id: Union[str, List[str], None] = None):
-    """Background task to run the teacher agent with MongoDB Atlas Vector Search"""
-    try:
-        # Update task status to running
-        teacher_tasks[task_id]["status"] = "running"
-
-        print(f"🚀 Running teacher agent in background - task_id: {task_id}, user_id: {user_id}")
-
-        # Check if MongoDB is available
-        from database.mongodb_client import USE_MOCK_DB
-        if USE_MOCK_DB:
-            error_msg = "MongoDB Atlas connection is required for vector search functionality."
-            error_message = f"I'm sorry, but MongoDB Atlas is required to process your question. Please contact the administrator."
-
-            teacher_tasks[task_id]["status"] = "failed"
-            teacher_tasks[task_id]["error"] = error_msg
-            teacher_tasks[task_id]["response"] = error_message
-            teacher_tasks[task_id]["chat_history"] = chat_history + [
-                {"role": "user", "content": query},
-                {"role": "assistant", "content": error_message}
-            ]
-
-            # Save the error message to the database
-            try:
-                save_chat_message(user_id, "user", query)
-                save_chat_message(user_id, "assistant", error_message)
-            except Exception:
-                pass  # Ignore database errors at this point
-
-            print(f"❌ {error_msg}")
-            return
-
-        try:
-            # Run the teacher agent
-            result = run_teacher_agent(
-                user_query=query,
-                user_id=user_id,
-                chat_history=chat_history,
-                pdf_id=pdf_id
-            )
-
-            # Ensure we have a valid response
-            response = result.get("response")
-            if not response:
-                response = "I'm sorry, I couldn't generate a response to your question."
-                result["response"] = response
-
-            # Save the response and chat history
-            teacher_tasks[task_id]["response"] = response
-            teacher_tasks[task_id]["chat_history"] = result.get("chat_history", [])
-
-            # Save the new messages to the database
-            save_chat_message(user_id, "user", query)
-            save_chat_message(user_id, "assistant", response)
-
-            # Update task status
-            teacher_tasks[task_id]["status"] = "completed"
-            print(f"✅ Teacher agent task completed - task_id: {task_id}")
-
-        except ValueError as ve:
-            if "MongoDB" in str(ve):
-                error_msg = str(ve)
-                error_message = f"I'm sorry, but MongoDB Atlas is required to process your question. Please contact the administrator."
-
-                teacher_tasks[task_id]["status"] = "failed"
-                teacher_tasks[task_id]["error"] = error_msg
-                teacher_tasks[task_id]["response"] = error_message
-                teacher_tasks[task_id]["chat_history"] = chat_history + [
-                    {"role": "user", "content": query},
-                    {"role": "assistant", "content": error_message}
-                ]
-
-                # Save the error message to the database
-                try:
-                    save_chat_message(user_id, "user", query)
-                    save_chat_message(user_id, "assistant", error_message)
-                except Exception:
-                    pass  # Ignore database errors at this point
-
-                print(f"❌ {error_msg}")
-            else:
-                raise
-
-    except Exception as e:
-        error_message = f"I'm sorry, but there was an error processing your question: {str(e)}"
-        teacher_tasks[task_id]["status"] = "failed"
-        teacher_tasks[task_id]["error"] = str(e)
-        teacher_tasks[task_id]["response"] = error_message
-        teacher_tasks[task_id]["chat_history"] = chat_history + [
-            {"role": "user", "content": query},
-            {"role": "assistant", "content": error_message}
-        ]
-
-        # Save the error message to the database
-        try:
-            save_chat_message(user_id, "user", query)
-            save_chat_message(user_id, "assistant", error_message)
-        except Exception:
-            pass  # Ignore database errors at this point
-
-        print(f"❌ Error in teacher agent task {task_id}: {e}")
-        import traceback
-        traceback.print_exc()
-
-def run_simulation_background(task_id: str, user_inputs: dict, simulation_steps: int, simulation_unit: str):
-    """Background task to run the simulation"""
-    try:
-        # Update task status to running
-        simulation_tasks[task_id]["status"] = "running"
-
-        # Generate a simulation ID
-        from database.mongodb_client import (
-            save_user_input,
-            save_agent_output,
-            get_previous_month_outputs,
-            get_agent_outputs_for_month,
-            generate_simulation_id,
-            get_database
-        )
-
-        # Initialize MongoDB collections
-        db = get_database()
-        pdf_collection = db["pdf_metadata"]
-        chunks_collection = db["pdf_chunks"]
-
-        # Store simulation_id in task details
-        simulation_id = generate_simulation_id()
-        simulation_tasks[task_id]["simulation_id"] = simulation_id
-        print(f"📝 Simulation ID: {simulation_id} for task {task_id}")
-
-        # Run the simulation with task_id and simulation_id for status updates
-        result = simulate_timeline_langgraph(
-            simulation_steps,
-            simulation_unit,
-            user_inputs,
-            task_id,
-            simulation_id
-        )
-
-        # Update task status based on result
-        if result:
-            simulation_tasks[task_id]["status"] = "completed"
-        else:
-            simulation_tasks[task_id]["status"] = "failed"
-
-    except Exception as e:
-        simulation_tasks[task_id]["status"] = "failed"
-        simulation_tasks[task_id]["error"] = str(e)
-        print(f"Error in simulation task {task_id}: {e}")
-
-@app.post("/start-simulation")
-async def start_simulation(payload: SimulationInput, background_tasks: BackgroundTasks):
-    """Start a simulation in the background and return a task ID"""
-    try:
-        # Convert pydantic model to dict
-        user_inputs = payload.model_dump()
-
-        # Get user_id
-        user_id = user_inputs["user_id"]
-
-        # Clear previous simulation data for this user (optional)
-        try:
-            # Get the database
-            from database.mongodb_client import get_database
-            db = get_database()
-
-            if db:
-                # Delete previous agent outputs for this user
-                collection = db["agent_outputs"]
-                delete_result = collection.delete_many({"user_id": user_id})
-                print(f"🧹 Deleted {delete_result.deleted_count} previous simulation records for user {user_id}")
-        except Exception as e:
-            print(f"⚠️ Warning: Could not clear previous simulation data: {e}")
-
-        # Generate a unique task ID
-        task_id = str(uuid.uuid4())
-
-        # Initialize task status
-        simulation_tasks[task_id] = {
-            "status": "queued",
-            "user_id": user_inputs["user_id"],
-            "user_name": user_inputs["user_name"],
-            "created_at": asyncio.get_event_loop().time()
+class FinancialSimulator:
+    """Main financial simulator class with enhanced agent-based functionality"""
+    
+    def __init__(self):
+        self.active_simulations = {}
+        self.simulation_results = {}
+        
+    def calculate_savings_potential(self, profile: FinancialProfile) -> Dict[str, float]:
+        """Calculate savings potential based on profile"""
+        total_expenses = sum(float(expense.get('amount', 0)) for expense in profile.expenses)
+        potential_savings = profile.monthly_income - total_expenses
+        
+        return {
+            "monthly_income": profile.monthly_income,
+            "total_expenses": total_expenses,
+            "potential_savings": potential_savings,
+            "savings_rate": (potential_savings / profile.monthly_income) * 100 if profile.monthly_income > 0 else 0
         }
-
-        # Run simulation in background using the executor
-        loop = asyncio.get_event_loop()
-        background_tasks.add_task(
-            loop.run_in_executor,
-            executor,
-            run_simulation_background,
-            task_id,
-            user_inputs,
-            6,  # simulation_steps (6 months)
-            "Months"  # simulation_unit
+    
+    def calculate_karmic_score(self, profile: FinancialProfile, savings_info: Dict) -> Dict[str, Any]:
+        """Calculate karmic score based on financial behavior and goals"""
+        savings_rate = savings_info["savings_rate"]
+        goal_alignment = 0
+        discipline_score = 0
+        wellness_score = 0
+        
+        # Goal alignment scoring (0-100)
+        if "emergency" in profile.financial_goal.lower():
+            goal_alignment = 85  # Emergency fund is high priority
+        elif "investment" in profile.financial_goal.lower() or "growth" in profile.financial_goal.lower():
+            goal_alignment = 75  # Investment goals are good
+        elif "debt" in profile.financial_goal.lower() or "pay off" in profile.financial_goal.lower():
+            goal_alignment = 90  # Debt reduction is excellent
+        elif "save" in profile.financial_goal.lower():
+            goal_alignment = 70  # General saving is good
+        else:
+            goal_alignment = 50  # Unclear goals
+        
+        # Discipline score based on savings rate
+        if savings_rate >= 20:
+            discipline_score = 95
+        elif savings_rate >= 15:
+            discipline_score = 85
+        elif savings_rate >= 10:
+            discipline_score = 75
+        elif savings_rate >= 5:
+            discipline_score = 60
+        else:
+            discipline_score = 30
+        
+        # Wellness score based on financial stress indicators
+        expense_to_income_ratio = savings_info["total_expenses"] / profile.monthly_income
+        if expense_to_income_ratio < 0.7:
+            wellness_score = 90  # Very healthy
+        elif expense_to_income_ratio < 0.8:
+            wellness_score = 80  # Healthy
+        elif expense_to_income_ratio < 0.9:
+            wellness_score = 65  # Moderate stress
+        elif expense_to_income_ratio < 0.95:
+            wellness_score = 45  # High stress
+        else:
+            wellness_score = 25  # Very high stress
+        
+        # Calculate overall karmic score (weighted average)
+        karmic_score = (
+            goal_alignment * 0.3 +  # 30% weight
+            discipline_score * 0.4 +  # 40% weight
+            wellness_score * 0.3     # 30% weight
         )
-
+        
+        # Determine karmic level
+        if karmic_score >= 90:
+            karmic_level = "Enlightened Investor"
+            karmic_message = "Your financial wisdom shines brightly! You demonstrate exceptional discipline and clarity."
+        elif karmic_score >= 80:
+            karmic_level = "Wise Planner"
+            karmic_message = "You show great financial wisdom. Continue on this path of mindful money management."
+        elif karmic_score >= 70:
+            karmic_level = "Conscious Saver"
+            karmic_message = "You're developing good financial habits. Keep building your financial consciousness."
+        elif karmic_score >= 60:
+            karmic_level = "Awakening Spender"
+            karmic_message = "You're beginning to understand financial balance. Focus on increasing your savings discipline."
+        else:
+            karmic_level = "Seeking Balance"
+            karmic_message = "Your financial journey is just beginning. Embrace mindful spending and conscious saving."
+        
+        return {
+            "overall_score": round(karmic_score, 2),
+            "level": karmic_level,
+            "message": karmic_message,
+            "breakdown": {
+                "goal_alignment": round(goal_alignment, 2),
+                "discipline_score": round(discipline_score, 2),
+                "wellness_score": round(wellness_score, 2)
+            },
+            "insights": {
+                "savings_rate_category": "Excellent" if savings_rate >= 20 else "Good" if savings_rate >= 10 else "Needs Improvement",
+                "stress_level": "Low" if expense_to_income_ratio < 0.8 else "Medium" if expense_to_income_ratio < 0.9 else "High",
+                "goal_clarity": "Clear" if goal_alignment >= 70 else "Moderate" if goal_alignment >= 50 else "Unclear"
+            }
+        }
+    
+    def generate_investment_recommendations(self, profile: FinancialProfile) -> List[str]:
+        """Generate investment recommendations based on profile"""
+        recommendations = []
+        
+        savings_info = self.calculate_savings_potential(profile)
+        savings_rate = savings_info["savings_rate"]
+        
+        if savings_rate < 10:
+            recommendations.append("Focus on expense reduction to increase savings rate above 10%")
+            recommendations.append("Consider creating a detailed budget to track spending")
+        elif savings_rate < 20:
+            recommendations.append("Good savings rate! Consider diversifying into low-risk investments")
+            recommendations.append("Build an emergency fund covering 3-6 months of expenses")
+        else:
+            recommendations.append("Excellent savings rate! You can consider higher-yield investments")
+        
+        # Risk-based recommendations
+        if profile.risk_level.lower() == "low":
+            recommendations.append("Consider government bonds, high-yield savings accounts, and CDs")
+            recommendations.append("Focus on capital preservation with modest growth")
+        elif profile.risk_level.lower() == "medium":
+            recommendations.append("Balanced portfolio with 60% stocks, 40% bonds")
+            recommendations.append("Consider index funds and diversified ETFs")
+        else:  # High risk
+            recommendations.append("Growth-focused portfolio with higher stock allocation")
+            recommendations.append("Consider growth stocks, emerging markets, and alternative investments")
+        
+        return recommendations
+    
+    def simulate_financial_future(self, profile: FinancialProfile, months: int) -> Dict[str, Any]:
+        """Simulate financial future over specified months with detailed monthly tracking"""
+        savings_info = self.calculate_savings_potential(profile)
+        monthly_savings = savings_info["potential_savings"]
+        
+        if monthly_savings <= 0:
+            return {
+                "status": "warning",
+                "message": "Negative or zero savings potential",
+                "monthly_savings": monthly_savings,
+                "projected_savings": [],
+                "monthly_breakdown": []
+            }
+        
+        # Growth rate based on risk level
+        annual_growth_rates = {
+            "low": 0.03,    # 3% annual return
+            "medium": 0.07, # 7% annual return
+            "high": 0.10    # 10% annual return
+        }
+        
+        annual_rate = annual_growth_rates.get(profile.risk_level.lower(), 0.05)
+        monthly_rate = annual_rate / 12
+        
+        # Simulate month by month with detailed tracking
+        projected_savings = []
+        monthly_breakdown = []
+        current_balance = 0
+        
+        for month in range(1, months + 1):
+            # Calculate month details
+            monthly_contribution = monthly_savings
+            growth_this_month = current_balance * monthly_rate
+            
+            # Add monthly savings
+            current_balance += monthly_contribution
+            # Apply growth
+            current_balance += growth_this_month
+            
+            # Calculate additional metrics for this month
+            total_contributed = monthly_savings * month
+            total_growth = current_balance - total_contributed
+            
+            # Monthly breakdown for detailed analysis
+            monthly_data = {
+                "month": month,
+                "balance": round(current_balance, 2),
+                "monthly_contribution": round(monthly_contribution, 2),
+                "growth_this_month": round(growth_this_month, 2),
+                "total_contributed": round(total_contributed, 2),
+                "total_growth": round(total_growth, 2),
+                "growth_percentage": round((total_growth / total_contributed * 100) if total_contributed > 0 else 0, 2),
+                "discipline_score": self._calculate_monthly_discipline_score(month, monthly_contribution, profile),
+                "milestone_reached": self._check_milestones(current_balance, total_contributed)
+            }
+            
+            projected_savings.append({
+                "month": month,
+                "balance": round(current_balance, 2),
+                "total_contributed": round(total_contributed, 2),
+                "growth_amount": round(total_growth, 2)
+            })
+            
+            monthly_breakdown.append(monthly_data)
+        
         return {
             "status": "success",
-            "message": "Simulation started",
-            "task_id": task_id
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/simulation-status/{task_id}")
-async def get_simulation_status(task_id: str):
-    """Get the status of a simulation task"""
-    if task_id not in simulation_tasks:
-        # Try to look up the task in MongoDB by simulation_id
-        from database.mongodb_client import get_database
-        db = get_database()
-        collection = db["agent_outputs"]
-        # Try to find a document with this task_id as simulation_id
-        mongo_result = collection.find_one({"simulation_id": task_id})
-        if mongo_result:
-            print(f"[RECOVERY] Task {task_id} not found in memory but found in MongoDB.")
-            return {
-                "status": "success",
-                "task_status": "completed",
-                "task_details": {"simulation_id": task_id, "status": "completed"}
+            "monthly_savings": monthly_savings,
+            "annual_growth_rate": annual_rate,
+            "final_balance": projected_savings[-1]["balance"] if projected_savings else 0,
+            "total_contributed": projected_savings[-1]["total_contributed"] if projected_savings else 0,
+            "total_growth": projected_savings[-1]["growth_amount"] if projected_savings else 0,
+            "projected_savings": projected_savings,
+            "monthly_breakdown": monthly_breakdown,
+            "summary_metrics": {
+                "average_monthly_growth": round(sum(m["growth_this_month"] for m in monthly_breakdown) / len(monthly_breakdown), 2) if monthly_breakdown else 0,
+                "compound_effect": round(((projected_savings[-1]["balance"] / projected_savings[-1]["total_contributed"]) - 1) * 100, 2) if projected_savings and projected_savings[-1]["total_contributed"] > 0 else 0,
+                "best_performing_month": max(monthly_breakdown, key=lambda x: x["growth_this_month"])["month"] if monthly_breakdown else 0
             }
-        raise HTTPException(status_code=404, detail="Task not found")
+        }
+    
+    def _calculate_monthly_discipline_score(self, month: int, contribution: float, profile: FinancialProfile) -> float:
+        """Calculate discipline score for a specific month"""
+        expected_contribution = self.calculate_savings_potential(profile)["potential_savings"]
+        if expected_contribution <= 0:
+            return 50
+        
+        ratio = contribution / expected_contribution
+        if ratio >= 1.0:
+            base_score = 100
+        elif ratio >= 0.8:
+            base_score = 85
+        elif ratio >= 0.6:
+            base_score = 70
+        else:
+            base_score = 50
+        
+        # Add consistency bonus for later months
+        consistency_bonus = min(month * 0.5, 10)
+        return min(base_score + consistency_bonus, 100)
+    
+    def _check_milestones(self, current_balance: float, total_contributed: float) -> Dict[str, Any]:
+        """Check if any financial milestones have been reached"""
+        milestones = {
+            "first_thousand": 1000,
+            "emergency_fund_start": 5000,
+            "investment_ready": 10000,
+            "substantial_savings": 25000,
+            "major_milestone": 50000
+        }
+        
+        reached_milestones = []
+        for milestone_name, amount in milestones.items():
+            if current_balance >= amount:
+                reached_milestones.append({
+                    "name": milestone_name,
+                    "amount": amount,
+                    "message": self._get_milestone_message(milestone_name)
+                })
+        
+        return {
+            "reached": len(reached_milestones) > 0,
+            "milestones": reached_milestones,
+            "next_milestone": self._get_next_milestone(current_balance, milestones)
+        }
+    
+    def _get_milestone_message(self, milestone_name: str) -> str:
+        """Get congratulatory message for reaching a milestone"""
+        messages = {
+            "first_thousand": "🎉 Congratulations! You've reached your first ₹1,000 milestone!",
+            "emergency_fund_start": "🛡️ Great job! You're building a solid emergency fund foundation!",
+            "investment_ready": "📈 Excellent! You're ready to explore investment opportunities!",
+            "substantial_savings": "💎 Outstanding! You've built substantial savings!",
+            "major_milestone": "🏆 Incredible achievement! You've reached a major financial milestone!"
+        }
+        return messages.get(milestone_name, "🎯 Milestone achieved!")
+    
+    def _get_next_milestone(self, current_balance: float, milestones: Dict) -> Dict[str, Any]:
+        """Get information about the next milestone to reach"""
+        for milestone_name, amount in sorted(milestones.items(), key=lambda x: x[1]):
+            if current_balance < amount:
+                return {
+                    "name": milestone_name,
+                    "amount": amount,
+                    "remaining": amount - current_balance,
+                    "progress_percentage": round((current_balance / amount) * 100, 2)
+                }
+        return {
+            "name": "financial_freedom",
+            "amount": 100000,
+            "remaining": 100000 - current_balance,
+            "progress_percentage": round((current_balance / 100000) * 100, 2)
+        }
+
+# Initialize simulator
+simulator = FinancialSimulator()
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
     return {
-        "status": "success",
-        "task_status": simulation_tasks[task_id]["status"],
-        "task_details": simulation_tasks[task_id]
+        "status": "healthy",
+        "service": "Financial Simulator",
+        "timestamp": datetime.now().isoformat(),
+        "advanced_forecasting": ADVANCED_FORECASTING
     }
 
-@app.get("/simulation-results/{task_id}")
-async def get_simulation_results(task_id: str):
-    """Get the latest results for a simulation task in progress"""
-    if task_id not in simulation_tasks:
-        # Try to look up the task in MongoDB by simulation_id
-        from database.mongodb_client import get_database
-        db = get_database()
-        collection = db["agent_outputs"]
-        mongo_results = list(collection.find({"simulation_id": task_id}))
-        if mongo_results:
-            print(f"[RECOVERY] Task {task_id} not found in memory but found in MongoDB.")
-            # Try to get user_id from the first result
-            user_id = mongo_results[0].get("user_id", "unknown")
-            # Prepare default structure
-            results = {
-                "simulated_cashflow": [],
-                "discipline_report": [],
-                "goal_status": [],
-                "behavior_tracker": [],
-                "karmic_tracker": [],
-                "financial_strategy": [],
-                "person_history": [],
-                "monthly_reflections": []
-            }
-            for item in mongo_results:
-                agent_name = item.get("agent_name", "")
-                month = item.get("month", 0)
-                data = item.get("data", {})
-                if data:
-                    if "month" not in data:
-                        data["month"] = month
-                    if agent_name == "cashflow" or agent_name == "cashflow_simulator":
-                        results["simulated_cashflow"].append(data)
-                    elif agent_name == "discipline_tracker":
-                        results["discipline_report"].append(data)
-                    elif agent_name == "goal_tracker":
-                        results["goal_status"].append(data)
-                    elif agent_name == "behavior_tracker":
-                        results["behavior_tracker"].append(data)
-                    elif agent_name == "karma_tracker":
-                        results["karmic_tracker"].append(data)
-                    elif agent_name == "financial_strategy":
-                        results["financial_strategy"].append(data)
-            # (Optional) Add person_history and monthly_reflections if needed
-            return {
-                "status": "success",
-                "ready": True,
-                "message": "Simulation results available (recovered from DB).",
-                "task_id": task_id,
-                "task_status": "completed",
-                "user_id": user_id,
-                "data": results,
-                "source": "mongodb"
-            }
-        return JSONResponse(
-            status_code=404,
-            content={
-                "status": "error",
-                "ready": False,
-                "message": "Task not found",
-                "data": {
-                    "simulated_cashflow": [],
-                    "discipline_report": [],
-                    "goal_status": [],
-                    "behavior_tracker": [],
-                    "karmic_tracker": [],
-                    "financial_strategy": [],
-                    "person_history": [],
-                    "monthly_reflections": []
-                }
-            }
-        )
-    # Get user_id from the task
-    user_id = simulation_tasks[task_id].get("user_id")
-    if not user_id:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "status": "error",
-                "ready": False,
-                "message": "User ID not found in task",
-                "data": {
-                    "simulated_cashflow": [],
-                    "discipline_report": [],
-                    "goal_status": [],
-                    "behavior_tracker": [],
-                    "karmic_tracker": [],
-                    "financial_strategy": [],
-                    "person_history": [],
-                    "monthly_reflections": []
-                }
-            }
-        )
-
-    # Get simulation_id if available
-    simulation_id = simulation_tasks[task_id].get("simulation_id")
-
-    # Get the latest results from MongoDB
+@app.post("/start-simulation", response_model=SimulationResponse)
+async def start_financial_simulation(request: SimulationRequest):
+    """Start a financial simulation with enhanced karmic score analysis"""
     try:
-        # If simulation_id is available, filter by it for more precise results
-        if simulation_id:
-            from database.mongodb_client import get_database
-            db = get_database()
-            query = {
-                "user_id": user_id,
-                "simulation_id": simulation_id
-            }
-            collection = db["agent_outputs"]
-            mongo_results = list(collection.find(query))
-            for result in mongo_results:
-                if "_id" in result:
-                    result["_id"] = str(result["_id"])
-        else:
-            from database.mongodb_client import get_all_agent_outputs_for_user
-            mongo_results = get_all_agent_outputs_for_user(user_id)
-
-        # Prepare default structure
+        simulation_id = f"sim_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(simulator.active_simulations)}"
+        
+        # Calculate savings potential
+        savings_info = simulator.calculate_savings_potential(request.profile)
+        
+        # Calculate karmic score
+        karmic_analysis = simulator.calculate_karmic_score(request.profile, savings_info)
+        
+        # Generate recommendations
+        recommendations = simulator.generate_investment_recommendations(request.profile)
+        
+        # Run enhanced simulation
+        simulation_results = simulator.simulate_financial_future(request.profile, request.simulation_months)
+        
+        # Store simulation
+        simulator.active_simulations[simulation_id] = {
+            "profile": request.profile.dict(),
+            "created_at": datetime.now().isoformat(),
+            "status": "completed"
+        }
+        
+        # Enhanced results with karmic score and detailed monthly data
         results = {
-            "simulated_cashflow": [],
-            "discipline_report": [],
-            "goal_status": [],
-            "behavior_tracker": [],
-            "karmic_tracker": [],
-            "financial_strategy": [],
-            "person_history": [],
-            "monthly_reflections": []
+            "simulation_id": simulation_id,
+            "profile_analysis": savings_info,
+            "karmic_analysis": karmic_analysis,
+            "simulation_data": simulation_results,
+            "investment_recommendations": recommendations,
+            "goal_analysis": {
+                "goal": request.profile.financial_goal,
+                "achievability": "achievable" if savings_info["potential_savings"] > 0 else "challenging",
+                "suggested_timeline": f"{request.simulation_months} months",
+                "karmic_alignment": karmic_analysis["breakdown"]["goal_alignment"]
+            },
+            "wellness_insights": {
+                "financial_stress_level": karmic_analysis["insights"]["stress_level"],
+                "discipline_rating": karmic_analysis["insights"]["savings_rate_category"],
+                "goal_clarity": karmic_analysis["insights"]["goal_clarity"],
+                "overall_wellness": karmic_analysis["level"]
+            },
+            "monthly_insights": {
+                "total_months": len(simulation_results.get("monthly_breakdown", [])),
+                "best_performing_month": simulation_results.get("summary_metrics", {}).get("best_performing_month", 0),
+                "average_growth": simulation_results.get("summary_metrics", {}).get("average_monthly_growth", 0),
+                "compound_effect": simulation_results.get("summary_metrics", {}).get("compound_effect", 0)
+            }
         }
-
-        if mongo_results:
-            # Group by agent name
-            for item in mongo_results:
-                agent_name = item.get("agent_name", "")
-                month = item.get("month", 0)
-                data = item.get("data", {})
-                if data:
-                    if "month" not in data:
-                        data["month"] = month
-                    if agent_name == "cashflow" or agent_name == "cashflow_simulator":
-                        results["simulated_cashflow"].append(data)
-                    elif agent_name == "discipline_tracker":
-                        results["discipline_report"].append(data)
-                    elif agent_name == "goal_tracker":
-                        results["goal_status"].append(data)
-                    elif agent_name == "behavior_tracker":
-                        results["behavior_tracker"].append(data)
-                    elif agent_name == "karma_tracker":
-                        results["karmic_tracker"].append(data)
-                    elif agent_name == "financial_strategy":
-                        results["financial_strategy"].append(data)
-
-            # Add person_history from data folder with user_id prefix
-            data_dir = "data"
-            person_history_path = f"{data_dir}/{user_id}_person_history.json"
-            alt_person_history_path = f"{data_dir}/string_persona_history.json"
-            fallback_path = f"{data_dir}/person_history.json"
-            person_history_data = []
-            if os.path.exists(person_history_path):
-                try:
-                    with open(person_history_path, "r") as f:
-                        person_history_data = json.load(f)
-                except Exception as e:
-                    print(f"⚠️ Warning: Could not load {user_id}_person_history.json: {e}")
-            elif os.path.exists(alt_person_history_path):
-                try:
-                    with open(alt_person_history_path, "r") as f:
-                        person_history_data = json.load(f)
-                except Exception as e:
-                    print(f"⚠️ Warning: Could not load {alt_person_history_path}: {e}")
-            elif os.path.exists(fallback_path):
-                try:
-                    with open(fallback_path, "r") as f:
-                        person_history_data = json.load(f)
-                except Exception as e:
-                    print(f"⚠️ Warning: Could not load fallback person_history.json: {e}")
-            results["person_history"] = person_history_data
-
-            # Add monthly reflections from monthly_output folder
-            monthly_output_dir = "monthly_output"
-            monthly_reflections = []
-            os.makedirs(monthly_output_dir, exist_ok=True)
-            months = set()
-            for category in ["simulated_cashflow", "discipline_report", "goal_status", "behavior_tracker", "karmic_tracker", "financial_strategy"]:
-                for item in results.get(category, []):
-                    if "month" in item:
-                        months.add(item["month"])
-            for month in months:
-                reflection_path = f"{monthly_output_dir}/{user_id}_reflection_month_{month}.json"
-                fallback_reflection_path = f"{monthly_output_dir}/reflection_month_{month}.json"
-                if os.path.exists(reflection_path):
-                    try:
-                        with open(reflection_path, "r") as f:
-                            reflection_data = json.load(f)
-                            if isinstance(reflection_data, dict):
-                                reflection_data["month"] = month
-                            monthly_reflections.append(reflection_data)
-                    except Exception as e:
-                        print(f"⚠️ Warning: Could not load {user_id}_reflection_month_{month}.json: {e}")
-                        if os.path.exists(fallback_reflection_path):
-                            try:
-                                with open(fallback_reflection_path, "r") as f:
-                                    reflection_data = json.load(f)
-                                    if isinstance(reflection_data, dict):
-                                        reflection_data["month"] = month
-                                    monthly_reflections.append(reflection_data)
-                            except Exception as e:
-                                print(f"⚠️ Warning: Could not load fallback reflection_month_{month}.json: {e}")
-                elif os.path.exists(fallback_reflection_path):
-                    try:
-                        with open(fallback_reflection_path, "r") as f:
-                            reflection_data = json.load(f)
-                            if isinstance(reflection_data, dict):
-                                reflection_data["month"] = month
-                            monthly_reflections.append(reflection_data)
-                    except Exception as e:
-                        print(f"⚠️ Warning: Could not load fallback reflection_month_{month}.json: {e}")
-            results["monthly_reflections"] = monthly_reflections
-
-            return {
-                "status": "success",
-                "ready": True,
-                "message": "Simulation results available.",
-                "task_id": task_id,
-                "task_status": simulation_tasks[task_id]["status"],
-                "user_id": user_id,
-                "data": results,
-                "source": "mongodb"
-            }
-        else:
-            return {
-                "status": "success",
-                "ready": False,
-                "message": "No simulation results available yet.",
-                "task_id": task_id,
-                "task_status": simulation_tasks[task_id]["status"],
-                "user_id": user_id,
-                "data": results,
-                "source": "mongodb"
-            }
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "ready": False,
-                "message": f"Error retrieving simulation results: {str(e)}",
-                "data": {
-                    "simulated_cashflow": [],
-                    "discipline_report": [],
-                    "goal_status": [],
-                    "behavior_tracker": [],
-                    "karmic_tracker": [],
-                    "financial_strategy": [],
-                    "person_history": [],
-                    "monthly_reflections": []
-                }
-            }
+        
+        simulator.simulation_results[simulation_id] = results
+        
+        return SimulationResponse(
+            status="success",
+            simulation_id=simulation_id,
+            results=results,
+            recommendations=recommendations + [f"Your current karmic score is {karmic_analysis['overall_score']}/100 - {karmic_analysis['level']}"],
+            timestamp=datetime.now().isoformat()
         )
+        
+    except Exception as e:
+        logger.error(f"Simulation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Simulation failed: {str(e)}")
 
-# /simulate endpoint removed as it's not being used
+@app.get("/simulation/{simulation_id}")
+async def get_simulation_results(simulation_id: str):
+    """Get results of a specific simulation"""
+    if simulation_id not in simulator.simulation_results:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+    
+    return {
+        "status": "success",
+        "simulation_id": simulation_id,
+        "results": simulator.simulation_results[simulation_id],
+        "timestamp": datetime.now().isoformat()
+    }
 
-# /get-simulation-result/{user_id} endpoint removed as it's not being used
+@app.get("/simulation-results/{simulation_id}")
+async def get_simulation_results_by_task_id(simulation_id: str):
+    """Get results of a specific simulation (alternative endpoint for frontend compatibility)"""
+    if simulation_id not in simulator.simulation_results:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+    
+    # Format response to match expected frontend structure
+    results = simulator.simulation_results[simulation_id]
+    
+    return {
+        "task_id": simulation_id,
+        "task_status": "completed",
+        "status": "success",
+        "ready": True,
+        "message": "Simulation results ready",
+        "user_id": "anonymous-user",
+        "data": results,
+        "timestamp": datetime.now().isoformat()
+    }
 
-# Teacher agent endpoints
-@app.post("/user/learning", response_model=TeacherResponse)
-async def learning_endpoint(
-    query: TeacherQuery,
-    background_tasks: BackgroundTasks
-):
-    """Process a learning query from the user and return a response from the teacher agent using MongoDB Atlas Vector Search"""
-    try:
-        actual_user_id = query.user_id
-        actual_query = query.query
-        actual_pdf_id = query.pdf_id
-        actual_wait = query.wait
+@app.get("/simulations")
+async def list_simulations():
+    """List all active simulations"""
+    return {
+        "status": "success",
+        "simulations": list(simulator.active_simulations.keys()),
+        "count": len(simulator.active_simulations),
+        "timestamp": datetime.now().isoformat()
+    }
 
-        print(f"📥 Received learning request - user_id: {actual_user_id}, query: '{actual_query}'")
-
-        # Check if MongoDB is available
-        from database.mongodb_client import USE_MOCK_DB
-        if USE_MOCK_DB:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "status": "error",
-                    "message": "MongoDB Atlas connection is required for vector search functionality.",
-                    "requires_mongodb_atlas": True
+@app.post("/forecast", response_model=ForecastResponse)
+async def create_financial_forecast(market_data: MarketData):
+    """Create financial forecast using advanced models"""
+    if not ADVANCED_FORECASTING:
+        # Simple fallback forecast
+        return ForecastResponse(
+            status="fallback",
+            forecast_data=[
+                {
+                    "date": (datetime.now() + timedelta(days=i)).isoformat(),
+                    "predicted_value": 100 + (i * 0.5),  # Simple linear growth
+                    "confidence": "low"
                 }
-            )
-
-        # Get chat history from database but limit to last 10 messages to avoid overwhelming context
-        from database.mongodb_client import get_chat_history_for_user
-        chat_history = get_chat_history_for_user(actual_user_id, limit=10)
-
-        # Convert to the format expected by the teacher agent
-        formatted_chat_history = []
-        for msg in chat_history:
-            formatted_chat_history.append({
-                "role": msg.get("role", "user"),
-                "content": msg.get("content", "")
+                for i in range(1, market_data.forecast_periods + 1)
+            ],
+            model_used="simple_linear",
+            accuracy_metrics={"note": "Advanced forecasting not available"},
+            summary={"trend": "upward", "confidence": "low"},
+            timestamp=datetime.now().isoformat()
+        )
+    
+    try:
+        # Use advanced forecasting if available
+        df_data = []
+        for point in market_data.data:
+            df_data.append({
+                'ds': pd.to_datetime(point.get('date')),
+                'y': float(point.get('value', 0))
             })
-
-        print(f"📜 Retrieved {len(formatted_chat_history)} chat history messages")
-        if formatted_chat_history:
-            print(f"📜 Most recent message - Role: {formatted_chat_history[-1].get('role')}, Content: {formatted_chat_history[-1].get('content', '')[:50]}...")
-
-        # Handle PDF IDs
-        pdf_id_param = None
-        if actual_pdf_id:
-            if isinstance(actual_pdf_id, list):
-                # If multiple PDF IDs are provided
-                print(f"📚 Using multiple PDFs: {', '.join(actual_pdf_id)}")
-                if len(actual_pdf_id) > 0:
-                    pdf_id_param = actual_pdf_id
-            else:
-                # Single PDF ID
-                print(f"📚 Using specific PDF: {actual_pdf_id}")
-                pdf_id_param = actual_pdf_id
-
-        # Ensure query is properly formatted
-        current_query = actual_query.strip()
-        print(f"🔍 Processing query: '{current_query}'")
-
-        # Generate a unique task ID
-        task_id = str(uuid.uuid4())
-
-        # Check if we should wait for the response or run in the background
-        if actual_wait:
-            # Run the teacher agent synchronously
-            print(f"⏱️ Running teacher agent synchronously - task_id: {task_id}")
-            try:
-                result = run_teacher_agent(
-                    user_query=current_query,
-                    user_id=actual_user_id,
-                    chat_history=formatted_chat_history,
-                    pdf_id=pdf_id_param
-                )
-
-                # Log the response
-                print(f"✅ Teacher agent response: '{result['response'][:50]}...'")
-
-                # Save the new messages to the database
-                save_chat_message(actual_user_id, "user", current_query)
-                save_chat_message(actual_user_id, "assistant", result["response"])
-
-                return TeacherResponse(
-                    response=result["response"],
-                    chat_history=result["chat_history"],
-                    learning_task_id=task_id,  # Only use learning_task_id for clarity
-                    status="completed"
-                )
-            except ValueError as ve:
-                if "MongoDB" in str(ve):
-                    return JSONResponse(
-                        status_code=400,
-                        content={
-                            "status": "error",
-                            "message": str(ve),
-                            "requires_mongodb_atlas": True
-                        }
-                    )
-                else:
-                    raise
-        else:
-            # Run the teacher agent in the background
-            print(f"🔄 Running teacher agent in background - task_id: {task_id}")
-
-            # Initialize task status
-            teacher_tasks[task_id] = {
-                "status": "queued",
-                "user_id": actual_user_id,
-                "query": current_query,
-                "created_at": asyncio.get_event_loop().time(),
-                "response": None,
-                "chat_history": None
-            }
-
-            # Run teacher agent in background using the executor
-            loop = asyncio.get_event_loop()
-            background_tasks.add_task(
-                loop.run_in_executor,
-                executor,
-                run_teacher_agent_background,
-                task_id,
-                actual_user_id,
-                current_query,
-                formatted_chat_history,
-                pdf_id_param
+        
+        df = pd.DataFrame(df_data)
+        
+        if len(df) < 10:
+            raise HTTPException(status_code=400, detail="Need at least 10 data points for forecasting")
+        
+        # Use smart model selector
+        selector = SmartModelSelector("general")
+        selection_result = selector.select_best_model(df)
+        
+        if selection_result['selected_model'] in ['prophet', 'arima']:
+            model = selection_result['model_object']
+            forecast_df = model.predict(periods=market_data.forecast_periods)
+            
+            forecast_data = []
+            for _, row in forecast_df.iterrows():
+                forecast_data.append({
+                    "date": row['ds'].isoformat(),
+                    "predicted_value": float(row['yhat']),
+                    "lower_bound": float(row.get('yhat_lower', row['yhat'] * 0.95)),
+                    "upper_bound": float(row.get('yhat_upper', row['yhat'] * 1.05))
+                })
+            
+            return ForecastResponse(
+                status="success",
+                forecast_data=forecast_data,
+                model_used=selection_result['selected_model'],
+                accuracy_metrics=selection_result.get('metrics', {}),
+                summary={
+                    "trend": "upward" if forecast_data[-1]["predicted_value"] > forecast_data[0]["predicted_value"] else "downward",
+                    "confidence": "high"
+                },
+                timestamp=datetime.now().isoformat()
             )
-
-            # Save the user message to the database immediately
-            save_chat_message(actual_user_id, "user", current_query)
-
-            return TeacherResponse(
-                response="Your question is being processed. Please check back in a moment for the response.",
-                learning_task_id=task_id,  # Only use learning_task_id for clarity
-                status="queued"
-            )
-    except Exception as e:
-        print(f"❌ Error in learning endpoint: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/user/learning/{learning_task_id}", response_model=TeacherResponse)
-async def get_learning_status(learning_task_id: str):
-    """Get the status and response of a teacher agent task"""
-    if learning_task_id not in teacher_tasks:
-        raise HTTPException(status_code=404, detail="Learning task not found")
-
-    task = teacher_tasks[learning_task_id]
-    status = task.get("status", "queued")
-
-    # Ensure we have a valid response string
-    response = task.get("response")
-    if response is None:
-        if status == "failed":
-            response = "I'm sorry, but there was an error processing your question. Please try again."
         else:
-            response = "Your question is still being processed. Please check back in a moment."
-
-    # Return the response with all required fields
-    return TeacherResponse(
-        response=response,
-        chat_history=task.get("chat_history", []),
-        learning_task_id=learning_task_id,  # Only use learning_task_id for clarity
-        status=status
-    )
-
-@app.post("/pdf/chat")
-async def pdf_upload_endpoint(
-    user_id: str = Form(...),
-    pdf_file: UploadFile = File(...)
-):
-    """Upload a PDF file for the teacher agent to use in explanations with MongoDB Atlas Vector Search"""
-    try:
-        # Create temp directory if it doesn't exist
-        temp_dir = Path("temp_pdfs")
-        temp_dir.mkdir(exist_ok=True)
-
-        # Save the uploaded file
-        file_path = temp_dir / f"{user_id}_{pdf_file.filename}"
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(pdf_file.file, buffer)
-
-        # Process the PDF
-        result = handle_pdf_upload(str(file_path), user_id)
-
-        if result["success"]:
-            return {
-                "status": "success",
-                "message": result["message"],
-                "user_id": user_id,
-                "pdf_id": result["pdf_id"],
-                "chunk_count": result.get("chunk_count", 0)
-            }
-        else:
-            # Return a more specific error message for MongoDB Atlas requirement
-            if "MongoDB Atlas" in result["message"]:
-                return JSONResponse(
-                    status_code=400,
-                    content={
-                        "status": "error",
-                        "message": result["message"],
-                        "requires_mongodb_atlas": True
-                    }
-                )
-            else:
-                return JSONResponse(
-                    status_code=400,
-                    content={
-                        "status": "error",
-                        "message": result["message"]
-                    }
-                )
+            raise HTTPException(status_code=500, detail="Model selection failed")
+            
     except Exception as e:
-        print(f"❌ Error in PDF upload: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Forecasting error: {e}")
+        raise HTTPException(status_code=500, detail=f"Forecasting failed: {str(e)}")
 
-# Define a model for PDF removal request
-class PDFRemovalRequest(BaseModel):
-    user_id: str
-    pdf_id: Optional[Union[str, List[str]]] = None
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "service": "Financial Simulator API",
+        "version": "1.0.0",
+        "status": "running",
+        "endpoints": [
+            "/health",
+            "/start-simulation",
+            "/simulation/{simulation_id}",
+            "/simulations",
+            "/forecast"
+        ],
+        "advanced_forecasting": ADVANCED_FORECASTING
+    }
 
-@app.post("/pdf/removed")
-async def pdf_removal_endpoint(request: PDFRemovalRequest):
-    """
-    Remove PDF data for a user or a specific PDF
-
-    Request body:
-        user_id: User identifier
-        pdf_id: Optional PDF ID or list of PDF IDs to remove specific PDFs
-    """
-    try:
-        print(f"🗑️ PDF removal request - user_id: {request.user_id}, pdf_id: {request.pdf_id}")
-
-        # Remove PDF data
-        result = handle_pdf_removal(request.user_id, request.pdf_id)
-
-        if result["success"]:
-            return {
-                "status": "success",
-                "message": result["message"],
-                "user_id": request.user_id,
-                "pdf_id": result.get("pdf_id")
-            }
-        else:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "status": "error",
-                    "message": result["message"]
-                }
-            )
-    except Exception as e:
-        print(f"❌ Error in PDF removal: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/pdf/list")
-async def pdf_list_endpoint(user_id: str):
-    try:
-        # Get MongoDB database
-        from database.mongodb_client import get_database
-        db = get_database()
-
-        # Get all PDFs for this user
-        pdf_docs = list(db["pdf_metadata"].find({"user_id": user_id}))
-
-        # Convert ObjectId to string
-        for doc in pdf_docs:
-            if "_id" in doc:
-                doc["_id"] = str(doc["_id"])
-
-        return {
-            "status": "success",
-            "pdfs": pdf_docs
-        }
-    except Exception as e:
-        print(f"❌ Error listing PDFs: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-def main():
-    try:
-        uvicorn.run("langgraph_api:app",host="0.0.0.0",port=8002,reload=False)
-    except Exception as e:
-        print(f"❌ Error starting server: {e}")
-        import traceback
-        traceback.print_exc()
-        raise
-
-# If you want to run with `python langgraph_api.py`
 if __name__ == "__main__":
-    uvicorn.run("langgraph_api:app", host="0.0.0.0", port=8002, reload=False)
+    port = int(os.getenv("PORT", 8002))
+    uvicorn.run(
+        "langgraph_api:app",
+        host="0.0.0.0",
+        port=port,
+        reload=True,
+        log_level="info"
+    )

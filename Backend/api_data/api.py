@@ -35,6 +35,11 @@ from db import pdf_collection , image_collection, user_collection
 from datetime import datetime, timezone
 import shutil
 import time
+
+# In-memory storage for agent data (in production, use a proper database)
+agent_outputs = []
+agent_logs = []
+agent_simulations = {}  # Track active simulations by user_id
 try:
     from docx import Document
     import docx2txt
@@ -56,10 +61,10 @@ TEMP_DIR = os.path.join(os.path.dirname(__file__), "temp")
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from uuid import uuid4
 
 # Initialize FastAPI app
@@ -70,6 +75,7 @@ _allowed_list = [o.strip() for o in _allowed.split(",") if o.strip()] or [
     "http://localhost",
     "http://localhost:3000",
     "http://localhost:5173",
+    "http://localhost:5174",
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -680,12 +686,12 @@ async def process_pdf_stream(
     )
 
 @app.get("/process-img-stream")
-async def process_img_stream(
+async def process_image_stream(
     file_path: str = None,
     llm: str = "uniguru"
 ):
     """
-    Stream image processing results line by line for live rendering
+    Stream Image processing results line by line for live rendering
     """
     async def generate_content():
         try:
@@ -704,14 +710,8 @@ async def process_img_stream(
             yield f"data: 🤖 Using UNIGURU AI model\n\n"
             await asyncio.sleep(0.2)
 
-            yield f"data: 📝 Generating comprehensive image analysis...\n\n"
+            yield f"data: 📝 Generating comprehensive analysis...\n\n"
             await asyncio.sleep(0.3)
-
-            # Check if OCR text was found
-            if image_response.ocr_text and image_response.ocr_text != "No readable text found in the image.":
-                yield f"data: 📖 Text extracted from image:\n\n"
-                yield f"data: {image_response.ocr_text}\n\n"
-                yield f"data: \n\n"
 
             # Clean the answer content (remove markdown formatting)
             answer = image_response.answer
@@ -722,7 +722,8 @@ async def process_img_stream(
             # Split content into lines for streaming
             content_lines = cleaned_answer.split('\n')
 
-            yield f"data: 📊 Analysis Results:\n\n"
+            yield f"data: \n\n"
+            yield f"data: Image Analysis Results\n\n"
             yield f"data: \n\n"
 
             # Stream content line by line
@@ -752,6 +753,318 @@ async def process_img_stream(
             "Content-Type": "text/plain; charset=utf-8"
         }
     )
+
+
+# ==== AGENT SIMULATION ENDPOINTS ====
+
+# Pydantic models for agent simulation
+class AgentMessageRequest(BaseModel):
+    message: str
+    agent_id: str = Field(alias='agentId')
+    user_id: Optional[str] = Field(default="guest-user", alias='userId')
+    timestamp: Optional[str] = None
+    
+    class Config:
+        populate_by_name = True  # Allow both field name and alias
+
+class AgentSimulationRequest(BaseModel):
+    agent_id: str = Field(alias='agentId')
+    user_id: Optional[str] = Field(default="guest-user", alias='userId')
+    timestamp: Optional[str] = None
+    # Additional optional fields for extended functionality
+    financial_profile: Optional[dict] = Field(default=None, alias='financialProfile')
+    edu_mentor_profile: Optional[dict] = Field(default=None, alias='eduMentorProfile')
+    additional_data: Optional[dict] = None
+    
+    class Config:
+        populate_by_name = True  # Allow both field name and alias
+
+class AgentResetRequest(BaseModel):
+    user_id: Optional[str] = Field(default="guest-user", alias='userId')
+    timestamp: Optional[str] = None
+    # Additional optional fields for flexibility
+    additional_data: Optional[dict] = None
+    
+    class Config:
+        populate_by_name = True  # Allow both field name and alias
+
+@app.get("/get_agent_output")
+async def get_agent_output():
+    """Get agent outputs for the simulation"""
+    try:
+        # Return mock agent outputs with data processing content
+        mock_outputs = [
+            {
+                "agent_id": "data_processor",
+                "message": "Welcome to the data processing simulation! I can help you process documents and analyze content.",
+                "timestamp": datetime.now().isoformat(),
+                "type": "welcome",
+                "status": "active"
+            },
+            {
+                "agent_id": "document_analyzer",
+                "message": "I'm here to help with document analysis and content extraction.",
+                "timestamp": datetime.now().isoformat(),
+                "type": "introduction",
+                "status": "idle"
+            }
+        ]
+        
+        # Add any stored agent outputs
+        all_outputs = mock_outputs + agent_outputs
+        
+        return {
+            "status": "success",
+            "outputs": all_outputs[-10:],  # Return last 10 outputs
+            "count": len(all_outputs),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting agent output: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/agent_logs")
+async def get_agent_logs():
+    """Get agent logs for monitoring"""
+    try:
+        # Mock agent logs
+        mock_agent_logs = [
+            {
+                "log_id": str(uuid4()),
+                "agent_id": "data_processor",
+                "level": "INFO",
+                "message": "Data processing agent initialized successfully",
+                "timestamp": datetime.now().isoformat(),
+                "user_id": "system"
+            },
+            {
+                "log_id": str(uuid4()),
+                "agent_id": "document_analyzer",
+                "level": "INFO",
+                "message": "Document analyzer ready for processing",
+                "timestamp": datetime.now().isoformat(),
+                "user_id": "system"
+            }
+        ]
+        
+        # Combine with stored logs
+        all_logs = mock_agent_logs + agent_logs
+        
+        return {
+            "status": "success",
+            "logs": all_logs[-20:],  # Return last 20 logs
+            "count": len(all_logs),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting agent logs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/agent_message")
+async def send_agent_message(request: AgentMessageRequest):
+    """Send a message to an agent"""
+    try:
+        timestamp = request.timestamp or datetime.now().isoformat()
+        
+        # Store the message
+        message_record = {
+            "message_id": str(uuid4()),
+            "agent_id": request.agent_id,
+            "user_id": request.user_id,
+            "message": request.message,
+            "timestamp": timestamp,
+            "type": "user_message"
+        }
+        
+        agent_outputs.append(message_record)
+        
+        # Generate agent response based on agent type
+        if request.agent_id == "data_processor":
+            response_message = f"I understand you want to process: {request.message}. Let me help you with data analysis and processing."
+        elif request.agent_id == "document_analyzer":
+            response_message = f"Regarding your document about {request.message}, I can help with content extraction and analysis."
+        else:
+            response_message = f"Thank you for your message about {request.message}. I'm here to assist with data processing."
+        
+        # Store agent response
+        response_record = {
+            "message_id": str(uuid4()),
+            "agent_id": request.agent_id,
+            "user_id": request.user_id,
+            "message": response_message,
+            "timestamp": datetime.now().isoformat(),
+            "type": "agent_response"
+        }
+        
+        agent_outputs.append(response_record)
+        
+        # Log the interaction
+        agent_log = {
+            "log_id": str(uuid4()),
+            "agent_id": request.agent_id,
+            "level": "INFO",
+            "message": f"Processed message from user {request.user_id}",
+            "timestamp": datetime.now().isoformat(),
+            "user_id": request.user_id
+        }
+        agent_logs.append(agent_log)
+        
+        return {
+            "status": "success",
+            "message": "Message sent to agent successfully",
+            "agent_response": response_record,
+            "timestamp": timestamp
+        }
+        
+    except Exception as e:
+        logger.error(f"Error sending agent message: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/start_agent_simulation")
+async def start_agent_simulation(request: AgentSimulationRequest):
+    """Start an agent simulation with enhanced data handling"""
+    try:
+        timestamp = request.timestamp or datetime.now().isoformat()
+        
+        # Store simulation state with additional data
+        simulation_data = {
+            "agent_id": request.agent_id,
+            "status": "active",
+            "started_at": timestamp,
+            "user_id": request.user_id
+        }
+        
+        # Include additional profile data if provided
+        if request.financial_profile:
+            simulation_data["financial_profile"] = request.financial_profile
+        if request.edu_mentor_profile:
+            simulation_data["edu_mentor_profile"] = request.edu_mentor_profile
+        if request.additional_data:
+            simulation_data["additional_data"] = request.additional_data
+            
+        agent_simulations[request.user_id] = simulation_data
+        
+        # Log simulation start with additional context
+        context_info = []
+        if request.financial_profile:
+            context_info.append("financial data")
+        if request.edu_mentor_profile:
+            context_info.append("educational data")
+            
+        context_msg = f" with {', '.join(context_info)}" if context_info else ""
+        
+        agent_log = {
+            "log_id": str(uuid4()),
+            "agent_id": request.agent_id,
+            "level": "INFO",
+            "message": f"Agent simulation started for user {request.user_id}{context_msg}",
+            "timestamp": timestamp,
+            "user_id": request.user_id
+        }
+        agent_logs.append(agent_log)
+        
+        # Add welcome message to outputs
+        welcome_message = {
+            "message_id": str(uuid4()),
+            "agent_id": request.agent_id,
+            "user_id": request.user_id,
+            "message": f"Agent simulation started! Agent {request.agent_id} is now active and ready to assist with data processing{context_msg}.",
+            "timestamp": timestamp,
+            "type": "simulation_start"
+        }
+        agent_outputs.append(welcome_message)
+        
+        return {
+            "status": "success",
+            "message": f"Agent simulation started for {request.agent_id}",
+            "agent_id": request.agent_id,
+            "user_id": request.user_id,
+            "timestamp": timestamp,
+            "additional_context": context_info
+        }
+        
+    except Exception as e:
+        logger.error(f"Error starting agent simulation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/stop_agent_simulation")
+async def stop_agent_simulation(request: AgentSimulationRequest):
+    """Stop an agent simulation"""
+    try:
+        timestamp = request.timestamp or datetime.now().isoformat()
+        
+        # Update simulation state
+        if request.user_id in agent_simulations:
+            agent_simulations[request.user_id]["status"] = "stopped"
+            agent_simulations[request.user_id]["stopped_at"] = timestamp
+            
+            # Clear old logs for this user
+            for log in agent_logs:
+                if log.get("user_id") == request.user_id:
+                    log["status"] = "stopped"
+        
+        # Log simulation stop
+        agent_log = {
+            "log_id": str(uuid4()),
+            "agent_id": request.agent_id,
+            "level": "INFO",
+            "message": f"Agent simulation stopped for user {request.user_id}",
+            "timestamp": timestamp,
+            "user_id": request.user_id
+        }
+        agent_logs.append(agent_log)
+        
+        return {
+            "status": "success",
+            "message": f"Agent simulation stopped for {request.agent_id}",
+            "agent_id": request.agent_id,
+            "user_id": request.user_id,
+            "timestamp": timestamp
+        }
+        
+    except Exception as e:
+        logger.error(f"Error stopping agent simulation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/reset_agent_simulation")
+async def reset_agent_simulation(request: AgentResetRequest):
+    """Reset agent simulation for a user"""
+    try:
+        timestamp = request.timestamp or datetime.now().isoformat()
+        
+        # Clear simulation state for user
+        if request.user_id in agent_simulations:
+            del agent_simulations[request.user_id]
+        
+        # Clear user-specific logs and outputs
+        global agent_logs, agent_outputs
+        agent_logs = [log for log in agent_logs if log.get("user_id") != request.user_id]
+        agent_outputs = [output for output in agent_outputs if output.get("user_id") != request.user_id]
+        
+        # Log reset
+        reset_log = {
+            "log_id": str(uuid4()),
+            "agent_id": "system",
+            "level": "INFO",
+            "message": f"Agent simulation reset for user {request.user_id}",
+            "timestamp": timestamp,
+            "user_id": request.user_id
+        }
+        agent_logs.append(reset_log)
+        
+        return {
+            "status": "success",
+            "message": f"Agent simulation reset for user {request.user_id}",
+            "user_id": request.user_id,
+            "timestamp": timestamp
+        }
+        
+    except Exception as e:
+        logger.error(f"Error resetting agent simulation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     try:

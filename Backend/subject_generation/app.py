@@ -25,7 +25,7 @@ except ImportError as e:
     sys.exit(1)
 
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import time
 
 # Load environment variables from centralized configuration
@@ -218,6 +218,8 @@ _allowed = os.getenv("ALLOWED_ORIGINS", "").strip()
 _allowed_list = [o.strip() for o in _allowed.split(",") if o.strip()] or [
     "http://localhost",
     "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5174",
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -665,6 +667,126 @@ def cleanup_old_tasks():
         generation_tasks.pop(task_id, None)
         generation_results.pop(task_id, None)
         logger.info(f"Cleaned up old task: {task_id}")
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for service monitoring"""
+    return {
+        "status": "healthy",
+        "service": "Subject Generation Service",
+        "timestamp": datetime.now().isoformat(),
+        "version": "1.0.0",
+        "features": {
+            "lesson_generation": True,
+            "quiz_generation": True,
+            "tts_integration": True,
+            "wikipedia_integration": True,
+            "knowledge_store": True
+        }
+    }
+
+# Agent simulation endpoints for compatibility with frontend
+@app.post("/start_agent_simulation")
+async def start_agent_simulation(request: Request):
+    """Start agent simulation - compatibility endpoint"""
+    try:
+        data = await request.json()
+        agent_id = data.get("agent_id", "educational")
+        user_id = data.get("user_id", "guest-user")
+        
+        return {
+            "status": "success",
+            "message": f"Agent simulation started for {agent_id}",
+            "agent_id": agent_id,
+            "user_id": user_id,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to start agent simulation: {str(e)}"}
+        )
+
+@app.post("/stop_agent_simulation")
+async def stop_agent_simulation(request: Request):
+    """Stop agent simulation - compatibility endpoint"""
+    try:
+        data = await request.json()
+        agent_id = data.get("agent_id", "educational")
+        user_id = data.get("user_id", "guest-user")
+        
+        return {
+            "status": "success",
+            "message": f"Agent simulation stopped for {agent_id}",
+            "agent_id": agent_id,
+            "user_id": user_id,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to stop agent simulation: {str(e)}"}
+        )
+
+@app.post("/reset_agent_simulation")
+async def reset_agent_simulation(request: Request):
+    """Reset agent simulation - compatibility endpoint"""
+    try:
+        data = await request.json()
+        user_id = data.get("user_id", "guest-user")
+        
+        return {
+            "status": "success",
+            "message": "Agent simulation reset",
+            "user_id": user_id,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to reset agent simulation: {str(e)}"}
+        )
+
+@app.get("/get_agent_output")
+async def get_agent_output():
+    """Get agent output - compatibility endpoint"""
+    return {
+        "status": "success",
+        "outputs": [],
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/agent_logs")
+async def get_agent_logs():
+    """Get agent logs - compatibility endpoint"""
+    return {
+        "status": "success",
+        "logs": [],
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.post("/agent_message")
+async def send_agent_message(request: Request):
+    """Send message to agent - compatibility endpoint"""
+    try:
+        data = await request.json()
+        message = data.get("message", "")
+        agent_id = data.get("agent_id", "educational")
+        user_id = data.get("user_id", "guest-user")
+        
+        return {
+            "status": "success",
+            "message": "Message received",
+            "response": f"Agent {agent_id} received your message: {message}",
+            "agent_id": agent_id,
+            "user_id": user_id,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to send agent message: {str(e)}"}
+        )
 
 @app.get("/generate_lesson")
 async def generate_lesson_get(
@@ -3161,6 +3283,298 @@ async def get_user_quiz_history(user_id: str, limit: int = 10):
             status_code=500,
             detail=f"Error retrieving quiz history: {str(e)}"
         )
+
+
+# ==== AGENT SIMULATION ENDPOINTS ====
+
+# Pydantic models for agent simulation
+class AgentMessageRequest(BaseModel):
+    message: str
+    agent_id: str = Field(alias='agentId')
+    user_id: Optional[str] = Field(default="guest-user", alias='userId')
+    timestamp: Optional[str] = None
+    
+    class Config:
+        populate_by_name = True  # Allow both field name and alias
+
+class AgentSimulationRequest(BaseModel):
+    agent_id: str = Field(alias='agentId')
+    user_id: Optional[str] = Field(default="guest-user", alias='userId')
+    timestamp: Optional[str] = None
+    # Additional optional fields for extended functionality
+    financial_profile: Optional[dict] = Field(default=None, alias='financialProfile')
+    edu_mentor_profile: Optional[dict] = Field(default=None, alias='eduMentorProfile')
+    additional_data: Optional[dict] = None
+    
+    class Config:
+        populate_by_name = True  # Allow both field name and alias
+
+class AgentResetRequest(BaseModel):
+    user_id: Optional[str] = Field(default="guest-user", alias='userId')
+    timestamp: Optional[str] = None
+    # Additional optional fields for flexibility
+    additional_data: Optional[dict] = None
+    
+    class Config:
+        populate_by_name = True  # Allow both field name and alias
+
+@app.get("/get_agent_output")
+async def get_agent_output():
+    """Get agent outputs for the simulation"""
+    try:
+        # Return mock agent outputs with educational content
+        mock_outputs = [
+            {
+                "agent_id": "educational",
+                "message": "Welcome to the educational simulation! I can help you learn various subjects and topics.",
+                "timestamp": datetime.now().isoformat(),
+                "type": "welcome",
+                "status": "active"
+            },
+            {
+                "agent_id": "financial",
+                "message": "I'm here to help with financial planning and investment advice.",
+                "timestamp": datetime.now().isoformat(),
+                "type": "introduction",
+                "status": "idle"
+            }
+        ]
+        
+        # Add any stored agent outputs
+        all_outputs = mock_outputs + agent_outputs
+        
+        return {
+            "status": "success",
+            "outputs": all_outputs[-10:],  # Return last 10 outputs
+            "count": len(all_outputs),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting agent output: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/agent_logs")
+async def get_agent_logs():
+    """Get agent logs for monitoring"""
+    try:
+        # Mock agent logs
+        mock_agent_logs = [
+            {
+                "log_id": str(uuid.uuid4()),
+                "agent_id": "educational",
+                "level": "INFO",
+                "message": "Educational agent initialized successfully",
+                "timestamp": datetime.now().isoformat(),
+                "user_id": "system"
+            },
+            {
+                "log_id": str(uuid.uuid4()),
+                "agent_id": "financial",
+                "level": "INFO",
+                "message": "Financial agent ready for simulation",
+                "timestamp": datetime.now().isoformat(),
+                "user_id": "system"
+            }
+        ]
+        
+        # Combine with stored logs
+        all_logs = mock_agent_logs + agent_logs
+        
+        return {
+            "status": "success",
+            "logs": all_logs[-20:],  # Return last 20 logs
+            "count": len(all_logs),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting agent logs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/agent_message")
+async def send_agent_message(request: AgentMessageRequest):
+    """Send a message to an agent"""
+    try:
+        timestamp = request.timestamp or datetime.now().isoformat()
+        
+        # Store the message
+        message_record = {
+            "message_id": str(uuid.uuid4()),
+            "agent_id": request.agent_id,
+            "user_id": request.user_id,
+            "message": request.message,
+            "timestamp": timestamp,
+            "type": "user_message"
+        }
+        
+        agent_outputs.append(message_record)
+        
+        # Generate agent response based on agent type
+        if request.agent_id == "educational":
+            response_message = f"I understand you want to learn about: {request.message}. Let me help you with educational content on this topic."
+        elif request.agent_id == "financial":
+            response_message = f"Regarding your financial question about {request.message}, I can provide guidance on budgeting, investments, and financial planning."
+        else:
+            response_message = f"Thank you for your message about {request.message}. I'm here to assist you."
+        
+        # Store agent response
+        response_record = {
+            "message_id": str(uuid.uuid4()),
+            "agent_id": request.agent_id,
+            "user_id": request.user_id,
+            "message": response_message,
+            "timestamp": datetime.now().isoformat(),
+            "type": "agent_response"
+        }
+        
+        agent_outputs.append(response_record)
+        
+        # Log the interaction
+        agent_log = {
+            "log_id": str(uuid.uuid4()),
+            "agent_id": request.agent_id,
+            "level": "INFO",
+            "message": f"Processed message from user {request.user_id}",
+            "timestamp": datetime.now().isoformat(),
+            "user_id": request.user_id
+        }
+        agent_logs.append(agent_log)
+        
+        return {
+            "status": "success",
+            "message": "Message sent to agent successfully",
+            "agent_response": response_record,
+            "timestamp": timestamp
+        }
+        
+    except Exception as e:
+        logger.error(f"Error sending agent message: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/start_agent_simulation")
+async def start_agent_simulation(request: AgentSimulationRequest):
+    """Start an agent simulation"""
+    try:
+        timestamp = request.timestamp or datetime.now().isoformat()
+        
+        # Store simulation state
+        agent_simulations[request.user_id] = {
+            "agent_id": request.agent_id,
+            "status": "active",
+            "started_at": timestamp,
+            "user_id": request.user_id
+        }
+        
+        # Log simulation start
+        agent_log = {
+            "log_id": str(uuid.uuid4()),
+            "agent_id": request.agent_id,
+            "level": "INFO",
+            "message": f"Agent simulation started for user {request.user_id}",
+            "timestamp": timestamp,
+            "user_id": request.user_id
+        }
+        agent_logs.append(agent_log)
+        
+        # Add welcome message to outputs
+        welcome_message = {
+            "message_id": str(uuid.uuid4()),
+            "agent_id": request.agent_id,
+            "user_id": request.user_id,
+            "message": f"Agent simulation started! Agent {request.agent_id} is now active and ready to assist.",
+            "timestamp": timestamp,
+            "type": "simulation_start"
+        }
+        agent_outputs.append(welcome_message)
+        
+        return {
+            "status": "success",
+            "message": f"Agent simulation started for {request.agent_id}",
+            "agent_id": request.agent_id,
+            "user_id": request.user_id,
+            "timestamp": timestamp
+        }
+        
+    except Exception as e:
+        logger.error(f"Error starting agent simulation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/stop_agent_simulation")
+async def stop_agent_simulation(request: AgentSimulationRequest):
+    """Stop an agent simulation"""
+    try:
+        timestamp = request.timestamp or datetime.now().isoformat()
+        
+        # Update simulation state
+        if request.user_id in agent_simulations:
+            agent_simulations[request.user_id]["status"] = "stopped"
+            agent_simulations[request.user_id]["stopped_at"] = timestamp
+            
+            # Clear old logs for this user
+            for log in agent_logs:
+                if log.get("user_id") == request.user_id:
+                    log["status"] = "stopped"
+        
+        # Log simulation stop
+        agent_log = {
+            "log_id": str(uuid.uuid4()),
+            "agent_id": request.agent_id,
+            "level": "INFO",
+            "message": f"Agent simulation stopped for user {request.user_id}",
+            "timestamp": timestamp,
+            "user_id": request.user_id
+        }
+        agent_logs.append(agent_log)
+        
+        return {
+            "status": "success",
+            "message": f"Agent simulation stopped for {request.agent_id}",
+            "agent_id": request.agent_id,
+            "user_id": request.user_id,
+            "timestamp": timestamp
+        }
+        
+    except Exception as e:
+        logger.error(f"Error stopping agent simulation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/reset_agent_simulation")
+async def reset_agent_simulation(request: AgentResetRequest):
+    """Reset agent simulation for a user"""
+    try:
+        timestamp = request.timestamp or datetime.now().isoformat()
+        
+        # Clear simulation state for user
+        if request.user_id in agent_simulations:
+            del agent_simulations[request.user_id]
+        
+        # Clear user-specific logs and outputs
+        global agent_logs, agent_outputs
+        agent_logs = [log for log in agent_logs if log.get("user_id") != request.user_id]
+        agent_outputs = [output for output in agent_outputs if output.get("user_id") != request.user_id]
+        
+        # Log reset
+        reset_log = {
+            "log_id": str(uuid.uuid4()),
+            "agent_id": "system",
+            "level": "INFO",
+            "message": f"Agent simulation reset for user {request.user_id}",
+            "timestamp": timestamp,
+            "user_id": request.user_id
+        }
+        agent_logs.append(reset_log)
+        
+        return {
+            "status": "success",
+            "message": f"Agent simulation reset for user {request.user_id}",
+            "user_id": request.user_id,
+            "timestamp": timestamp
+        }
+        
+    except Exception as e:
+        logger.error(f"Error resetting agent simulation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Run on multiple IP addresses

@@ -61,7 +61,7 @@ import { selectUser } from "../store/authSlice";
 import { usePageContext, formatContextForAI } from "../hooks/usePageContext";
 import { TerminalMessage } from "./TerminalTypewriter";
 import { CHAT_API_BASE_URL } from "../config";
-import { supabase } from "../supabaseClient";
+import { useUser } from "@clerk/clerk-react";
 
 /**
  * LoadingDots - Animated loading indicator for chat responses
@@ -418,6 +418,7 @@ export default function AvatarChatInterface({ avatarPosition }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const user = useSelector(selectUser);
+  const { isSignedIn, user: clerkUser } = useUser();
   const isChatOpen = useSelector(selectIsChatOpen);
   const isChatExpanded = useSelector(selectIsChatExpanded);
   const chatHistory = useSelector(selectChatHistory);
@@ -1319,23 +1320,7 @@ Navigate using the buttons above, the sidebar menu, or just ask me to take you s
       // Get user ID (same logic as main chatbot)
       let effectiveUserId = userId;
       if (!effectiveUserId) {
-        try {
-          // Get the current session
-          const { data: sessionData } = await supabase.auth.getSession();
-          if (sessionData?.session?.user?.id) {
-            effectiveUserId = sessionData.session.user.id;
-          } else {
-            // Fallback to getUser if session doesn't have what we need
-            const { data: userData } = await supabase.auth.getUser();
-            if (userData?.user?.id) {
-              effectiveUserId = userData.user.id;
-            } else {
-              effectiveUserId = "guest-user";
-            }
-          }
-        } catch (error) {
-          effectiveUserId = "guest-user";
-        }
+        effectiveUserId = isSignedIn && clerkUser ? clerkUser.id : "guest-user";
       }
 
       // Send message with context (same as main chatbot)

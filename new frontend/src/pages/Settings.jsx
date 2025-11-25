@@ -6,6 +6,7 @@ import { supabase } from "../supabaseClient";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
+import { useUser } from "@clerk/clerk-react";
 
 export default function Settings() {
   const {
@@ -20,6 +21,7 @@ export default function Settings() {
 
   const { user, resetPassword, logout } = useAuth();
   const { t } = useTranslation();
+  const { isSignedIn, user: clerkUser } = useUser();
 
   // Local state for form values (to avoid immediate changes until saved)
   const [formValues, setFormValues] = useState({
@@ -102,39 +104,19 @@ export default function Settings() {
     // Perform account deletion
     try {
       // First, get the current user's ID
-      const {
-        data: { user: currentUser },
-      } = await supabase.auth.getUser();
-
-      if (!currentUser) {
+      if (!isSignedIn || !clerkUser) {
         throw new Error("No user found");
       }
 
-      console.log("Deleting user account:", currentUser.id);
+      console.log("Deleting user account:", clerkUser.id);
 
-      // Mark the user as deleted in metadata
-      const { error: updateError } = await supabase.auth.updateUser({
-        data: {
-          deleted: true,
-          deletedAt: new Date().toISOString(),
-        },
-      });
+      // With Clerk, actual account deletion should be done server-side via Clerk Admin API.
+      // Here we just sign the user out and show a message.
+      toast.success(t("Account deletion requested. You will be signed out."));
 
-      if (updateError) {
-        console.error("Error marking account as deleted:", updateError);
-        throw updateError;
-      }
-
-      // Show success message
-      toast.success(t("Account deleted. You will be signed out."));
-
-      // Sign out using our auth hook
       await logout();
-
-      // Basic cleanup
       localStorage.clear();
 
-      // Redirect after a delay
       setTimeout(() => {
         window.location.href = "/signin?deleted=true";
       }, 2000);

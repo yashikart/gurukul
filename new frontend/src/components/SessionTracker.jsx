@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useCallback } from "react";
-import { supabase } from "../supabaseClient";
 import { timeSync } from "../utils/timeSync";
+import { useUser } from "@clerk/clerk-react";
 
 const SessionTracker = ({ onTimeUpdate }) => {
   const sessionIdRef = useRef(crypto.randomUUID());
   const startTimeRef = useRef(Date.now());
   const userIdRef = useRef(null);
+  const { isSignedIn, user } = useUser();
   const lastRecordedTimeRef = useRef(null);
   const lastUpdateTimeRef = useRef(Date.now());
 
@@ -21,20 +22,10 @@ const SessionTracker = ({ onTimeUpdate }) => {
     if (timeSpent < 1 || timeSpent === lastRecordedTimeRef.current) return;
 
     try {
-      const { error } = await supabase.from("time_tracking").insert({
-        user_id: userIdRef.current,
-        session_id: sessionIdRef.current,
-        time_spent: timeSpent,
-        session_end: new Date().toISOString(),
-        end_reason: endReason,
-      });
-
-      if (error) {
-        console.error("Error recording time:", error);
-      } else {
-        lastRecordedTimeRef.current = timeSpent;
-        lastUpdateTimeRef.current = now;
-      }
+      // TODO: Replace with your backend API to record time with Clerk user ID
+      // await api.recordTime({ userId: userIdRef.current, sessionId: sessionIdRef.current, timeSpent, endReason });
+      lastRecordedTimeRef.current = timeSpent;
+      lastUpdateTimeRef.current = now;
     } catch (err) {
       console.error("Error in recordTimeSpent:", err);
     }
@@ -42,24 +33,10 @@ const SessionTracker = ({ onTimeUpdate }) => {
 
   useEffect(() => {
     const initTracking = async () => {
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        console.error("Supabase session error:", sessionError);
-        return;
-      }
-      userIdRef.current = session.user.id;
-
-      // Record initial session start
-      const { error } = await supabase.from("time_tracking").insert({
-        user_id: userIdRef.current,
-        session_id: sessionIdRef.current,
-        time_spent: 0,
-        session_start: new Date().toISOString(),
-      });
-      if (error) console.error("Error recording session start:", error);
+      if (!isSignedIn || !user) return;
+      userIdRef.current = user.id;
+      // Optionally inform backend of session start
+      // await api.startSession({ userId: userIdRef.current, sessionId: sessionIdRef.current });
     };
 
     // Reset timeSync when component mounts
@@ -96,7 +73,7 @@ const SessionTracker = ({ onTimeUpdate }) => {
       recordTimeSpent("component_unmount");
       unsubscribe();
     };
-  }, [onTimeUpdate, recordTimeSpent]);
+  }, [onTimeUpdate, recordTimeSpent, isSignedIn, user]);
 
   return null;
 };

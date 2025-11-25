@@ -139,7 +139,6 @@ import { orchestrationApiSlice } from "../api/orchestrationApiSlice";
 import { avatarChatApiSlice } from "../api/avatarChatApiSlice";
 import { agentApiSlice } from "../api/agentApiSlice";
 import { financialChatApiSlice } from "../api/financialChatApiSlice";
-import { pipelineApiSlice } from "../api/pipelineApiSlice";
 
 // Migration transform to clean up old data and optimize storage
 const avatarMigrationTransform = {
@@ -316,7 +315,6 @@ const rootReducer = combineReducers({
   [avatarChatApiSlice.reducerPath]: avatarChatApiSlice.reducer,
   [agentApiSlice.reducerPath]: agentApiSlice.reducer,
   [financialChatApiSlice.reducerPath]: financialChatApiSlice.reducer,
-  [pipelineApiSlice.reducerPath]: pipelineApiSlice.reducer,
 });
 
 export const store = configureStore({
@@ -336,8 +334,7 @@ export const store = configureStore({
       orchestrationApiSlice.middleware,
       avatarChatApiSlice.middleware,
       agentApiSlice.middleware,
-      financialChatApiSlice.middleware,
-      pipelineApiSlice.middleware
+      financialChatApiSlice.middleware
     ),
   devTools: process.env.NODE_ENV !== "production",
 });

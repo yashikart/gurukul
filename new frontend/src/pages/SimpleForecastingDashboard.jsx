@@ -496,52 +496,85 @@ const SimpleForecastingDashboard = () => {
           </div>
         )}
 
-        {/* Instructions */}
+        {/* About Advanced Forecasting Dashboard */}
         <GlassContainer className="p-6" noFixedHeight={true}>
           <h3 className="text-xl font-bold text-white mb-4 flex items-center">
             <Target className="mr-2" />
-            How to Verify Advanced Forecasting
+            About the Advanced Forecasting Dashboard
           </h3>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-4">
             <div>
-              <h4 className="text-lg font-semibold text-white mb-3">Backend Verification</h4>
-              <div className="space-y-2 text-sm text-white/80">
-                <div>1. Start the enhanced orchestration system:</div>
-                <code className="block bg-black/30 p-2 rounded text-green-400">
-                  cd Backend/orchestration/unified_orchestration_system<br/>
-                  python simple_api.py --port 8006
-                </code>
-                
-                <div className="mt-3">2. Check forecasting status:</div>
-                <code className="block bg-black/30 p-2 rounded text-green-400">
-                  curl http://localhost:8006/forecast/status
-                </code>
+              <h4 className="text-lg font-semibold text-white mb-3">What is it?</h4>
+              <p className="text-white/80 leading-relaxed">
+                The Advanced Forecasting Dashboard is an AI-powered time series prediction system that combines Prophet and ARIMA models 
+                to deliver accurate financial and market forecasting. It features intelligent model selection, real-time performance metrics, 
+                and adaptive algorithms that automatically choose the best forecasting approach based on your data characteristics.
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h4 className="text-lg font-semibold text-white mb-3">Key Features</h4>
+                <div className="space-y-2 text-sm text-white/80">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle size={16} className="text-green-400" />
+                    <span>Smart Model Selection (Prophet vs ARIMA)</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle size={16} className="text-green-400" />
+                    <span>Real-time Accuracy Metrics (MAE, RMSE, MAPE)</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle size={16} className="text-green-400" />
+                    <span>Interactive Visualizations & Charts</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle size={16} className="text-green-400" />
+                    <span>Confidence Intervals & Trend Analysis</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle size={16} className="text-green-400" />
+                    <span>Demo Mode with Offline Capabilities</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <h4 className="text-lg font-semibold text-white mb-3">Model Capabilities</h4>
+                <div className="space-y-2 text-sm text-white/80">
+                  <div className="flex items-start space-x-2">
+                    <CheckCircle size={16} className="text-blue-400 mt-0.5" />
+                    <div><strong>Prophet:</strong> Handles seasonal patterns, trends, and holidays</div>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <CheckCircle size={16} className="text-blue-400 mt-0.5" />
+                    <div><strong>ARIMA:</strong> Optimal for stationary data and short-term forecasts</div>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <CheckCircle size={16} className="text-blue-400 mt-0.5" />
+                    <div><strong>Ensemble:</strong> Combines multiple models for better accuracy</div>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <CheckCircle size={16} className="text-blue-400 mt-0.5" />
+                    <div><strong>Fallback:</strong> Multiple error handling mechanisms</div>
+                  </div>
+                </div>
               </div>
             </div>
             
             <div>
-              <h4 className="text-lg font-semibold text-white mb-3">Frontend Features</h4>
-              <div className="space-y-2 text-sm text-white/80">
-                <div className="flex items-center space-x-2">
-                  <CheckCircle size={16} className="text-green-400" />
-                  <span>Simple forecasting dashboard (no external deps)</span>
+              <h4 className="text-lg font-semibold text-white mb-3">Use Cases</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-white/80">
+                <div className="space-y-1">
+                  <div>• Financial market analysis and stock predictions</div>
+                  <div>• Investment strategy optimization</div>
+                  <div>• Risk assessment and probability forecasting</div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircle size={16} className="text-green-400" />
-                  <span>Prophet/ARIMA backend integration</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircle size={16} className="text-green-400" />
-                  <span>Real-time accuracy metrics</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircle size={16} className="text-green-400" />
-                  <span>Demo mode when backend unavailable</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircle size={16} className="text-green-400" />
-                  <span>Click "Full Dashboard" for advanced charts</span>
+                <div className="space-y-1">
+                  <div>• System performance and load forecasting</div>
+                  <div>• Educational analytics and progress tracking</div>
+                  <div>• General time series data prediction</div>
                 </div>
               </div>
             </div>

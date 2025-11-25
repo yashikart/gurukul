@@ -1,9 +1,11 @@
 import React, { useEffect } from "react";
-import { supabase } from "../supabaseClient";
 import { toast } from "react-hot-toast";
 import { storage } from "../utils/storageUtils";
+import { useClerk } from "@clerk/clerk-react";
 
 export default function SignOut() {
+  const { signOut } = useClerk();
+
   useEffect(() => {
     // Execute immediately
     const signOutAndRedirect = () => {
@@ -21,17 +23,12 @@ export default function SignOut() {
         console.error("Error clearing storage:", e);
       }
 
-      // Force redirect to sign-in page
-      window.location.href = "/signin";
-
-      // Attempt to sign out after redirect is initiated
-      // This is a "fire and forget" approach
-      try {
-        supabase.auth.signOut();
-      } catch (e) {
-        console.error("Error during sign out:", e);
-        // We don't need to handle this error since we're already redirecting
-      }
+      // Attempt to sign out and then redirect
+      signOut()
+        .catch((e) => console.error("Error during sign out:", e))
+        .finally(() => {
+          window.location.href = "/signin";
+        });
     };
 
     // Call the function immediately

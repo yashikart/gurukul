@@ -10,7 +10,7 @@ import requests
 from datetime import datetime
 from subject_data import subjects_data
 from lectures_data import lectures_data
-from test_data import test_data
+# from test_data import test_data  # Commented out - file not found
 # Now import from db.py after environment variables are loaded
 from db import user_collection, pdf_collection, image_collection
 from datetime import datetime, timezone
@@ -322,27 +322,99 @@ async def process_pdf(file: UploadFile = File(...), llm: str = Form(..., pattern
 async def process_image(file: UploadFile = File(...), llm: str = Form(..., pattern="^(grok|llama|chatgpt|uniguru)$")):
     temp_image_path = ""
     try:
+        # Enhanced file validation for JPG images
         if not file.filename.lower().endswith((".jpg", ".jpeg", ".png")):
             raise HTTPException(status_code=400, detail="Only JPG, JPEG, or PNG files are allowed")
+
+        # Log the file being processed
+        logger.info(f"Processing image file: {file.filename} (size: {file.size if hasattr(file, 'size') else 'unknown'} bytes)")
 
         temp_image_path = os.path.join(
             TEMP_DIR,
             f"temp_image_{time.strftime('%Y%m%d_%H%M%S')}{os.path.splitext(file.filename)[1]}"
         )
 
+        # Ensure temp directory exists
+        os.makedirs(TEMP_DIR, exist_ok=True)
+
         with open(temp_image_path, "wb") as temp_file:
             shutil.copyfileobj(file.file, temp_file)
 
-        ocr_text = extract_text_easyocr(temp_image_path).strip()
-        logger.info(f"OCR raw output: {repr(ocr_text)}")
+        # Verify the file was saved correctly
+        if not os.path.exists(temp_image_path) or os.path.getsize(temp_image_path) == 0:
+            raise HTTPException(status_code=500, detail="Failed to save uploaded image")
 
+        logger.info(f"Image saved to: {temp_image_path}")
+
+        # Enhanced OCR processing with better error handling
+        try:
+            ocr_text = extract_text_easyocr(temp_image_path).strip()
+            logger.info(f"OCR extraction completed. Text length: {len(ocr_text)}")
+            logger.info(f"OCR raw output: {repr(ocr_text)}")
+        except Exception as ocr_error:
+            logger.error(f"OCR processing failed: {ocr_error}")
+            ocr_text = ""
+
+        # Enhanced image analysis for comprehensive description
+        try:
+            from rag import analyze_image_content, generate_image_description
+            image_analysis = analyze_image_content(temp_image_path)
+            logger.info(f"Image analysis completed: {image_analysis}")
+        except Exception as analysis_error:
+            logger.error(f"Image analysis failed: {analysis_error}")
+            image_analysis = {}
+
+        # Enhanced response generation based on OCR results
         if not ocr_text:
             ocr_text = "No readable text found in the image."
-            answer = ocr_text
-            query = "N/A"
+            
+            # Generate description even when no text is found
+            if image_analysis:
+                try:
+                    image_description = generate_image_description(image_analysis, "")
+                    answer = f"Image Analysis: {image_description} This appears to be a visual image without readable text content, possibly containing graphics, photos, diagrams, or artistic elements."
+                except Exception as desc_error:
+                    logger.error(f"Description generation failed: {desc_error}")
+                    answer = "This image appears to be either blank, contains no text, or the text is not clear enough for optical character recognition. The image may contain graphics, handwriting, or text in a format that is difficult to extract."
+            else:
+                answer = "This image appears to be either blank, contains no text, or the text is not clear enough for optical character recognition. The image may contain graphics, handwriting, or text in a format that is difficult to extract."
+            
+            query = "Image analysis - visual content without readable text"
         else:
-            query = "give me detail summary of this image"
-            answer = call_llm(f"Summarize the following text extracted from an image: {ocr_text}", llm)
+            query = "Detailed analysis and summary of image content with text"
+            
+            # Generate comprehensive description including both text and visual analysis
+            if image_analysis:
+                try:
+                    image_description = generate_image_description(image_analysis, ocr_text)
+                    base_content = f"Image Properties: {image_description}\n\nExtracted Text Content: {ocr_text}"
+                except Exception as desc_error:
+                    logger.error(f"Description generation failed: {desc_error}")
+                    base_content = f"Extracted Text: {ocr_text}"
+            else:
+                base_content = f"Extracted Text: {ocr_text}"
+            
+            # Enhanced prompt for better image text summarization
+            enhanced_prompt = f"""You are analyzing a JPG/JPEG image that has been processed using OCR technology. Please provide a comprehensive analysis based on the following information:
+
+{base_content}
+
+Please provide:
+1. A clear summary of what the image and text contain
+2. The main topics, subjects, or themes covered
+3. Key information, data, or insights from the text
+4. The likely purpose or context of this image (document type, educational material, diagram, etc.)
+5. Any important details that should be highlighted
+6. If this appears to be educational content, identify the subject area
+
+Provide your analysis in a well-structured and informative manner that would be helpful for someone who cannot see the image."""
+            
+            try:
+                answer = call_llm(enhanced_prompt, llm)
+                logger.info(f"LLM response generated successfully using {llm}")
+            except Exception as llm_error:
+                logger.error(f"LLM processing failed: {llm_error}")
+                answer = f"Text was successfully extracted from the image: {ocr_text[:500]}{'...' if len(ocr_text) > 500 else ''}"
 
         audio_file = text_to_speech(answer, file_prefix="output_image")
         audio_url = f"/static/{os.path.basename(audio_file)}" if audio_file else "No audio generated"
@@ -418,7 +490,7 @@ async def download_audio(filename: str):
 
 if __name__ == "__main__":
     try:
-        uvicorn.run(app, host="192.168.0.83", port=8000)
+        uvicorn.run(app, host="127.0.0.1", port=8000)
     except Exception as e:
         logger.error(f"Failed to start server: {e}")
         raise

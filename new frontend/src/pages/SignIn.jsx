@@ -1,16 +1,25 @@
 import React, { useState, useEffect } from "react";
-import { supabase } from "../supabaseClient";
 import { toast } from "react-hot-toast";
 import { Mail, Lock, LogIn, RefreshCcw } from "lucide-react";
 import GlassInput from "../components/GlassInput";
 import GlassButton from "../components/GlassButton";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { getLastVisitedPath, clearSupabaseCache } from "../utils/routeUtils";
+import { getLastVisitedPath } from "../utils/routeUtils";
+import { useSignIn, useAuth, useUser } from "@clerk/clerk-react";
 
 export default function SignIn() {
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState("");
+  const { isLoaded, signIn, setActive } = useSignIn();
+  const { signOut } = useAuth();
+  const { isSignedIn } = useUser();
+
+  useEffect(() => {
+    if (isSignedIn) {
+      navigate("/home");
+    }
+  }, [isSignedIn, navigate]);
 
   // Check for deleted=true parameter in URL
   useEffect(() => {
@@ -34,36 +43,20 @@ export default function SignIn() {
     setError("");
 
     try {
-      // Clear any existing Supabase cache to prevent issues
-      clearSupabaseCache();
-
-      // Show loading toast
       toast.loading("Redirecting to sign in...", {
         position: "bottom-right",
         id: "oauth-loading",
       });
 
-      // Use the global redirectTo setting from supabaseClient.js
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: window.location.origin + "/auth/callback",
-        },
+      await signIn.authenticateWithRedirect({
+        strategy: provider === "google" ? "oauth_google" : provider,
+        redirectUrl: "/auth/callback",
+        redirectUrlComplete: "/home",
       });
-
-      if (error) {
-        toast.dismiss("oauth-loading");
-        setError(error.message);
-        toast.error(error.message, { position: "bottom-right" });
-      }
-
-      // Note: We can't check for deleted accounts here directly
-      // because OAuth redirects to the provider's site
-      // The AuthCallback component will handle the redirect after authentication
     } catch (err) {
       toast.dismiss("oauth-loading");
       console.error("OAuth sign in error:", err);
-      setError(err.message || "Failed to sign in with " + provider);
+      setError(err.errors?.[0]?.longMessage || err.message || "Failed to sign in");
       toast.error("Authentication failed. Please try again.", {
         position: "bottom-right",
       });
@@ -104,7 +97,6 @@ export default function SignIn() {
               e.preventDefault();
               setError("");
 
-              // Show loading toast
               const loadingToast = toast.loading("Signing in...", {
                 position: "bottom-right",
               });
@@ -121,46 +113,24 @@ export default function SignIn() {
                   return;
                 }
 
-                // Clear any existing Supabase cache to prevent issues
-                clearSupabaseCache();
+                if (!isLoaded) return; // Clerk not ready yet
 
-                // Attempt to sign in
-                const { data, error } = await supabase.auth.signInWithPassword({
-                  email,
-                  password,
-                });
+                const result = await signIn.create({ identifier: email, password });
 
-                if (error) {
-                  throw new Error(error.message);
+                if (result?.status === "complete") {
+                  await setActive({ session: result.createdSessionId });
+                  toast.dismiss(loadingToast);
+                  toast.success("Logged in successfully!", {
+                    position: "bottom-right",
+                    id: "auth-success",
+                  });
+                  navigate(getLastVisitedPath());
+                } else {
+                  throw new Error("Sign in not completed");
                 }
-
-                // Check if the user account has been marked as deleted
-                const user = data.user;
-                if (user?.user_metadata?.deleted === true) {
-                  // This account was marked as deleted, sign them out immediately
-                  await supabase.auth.signOut();
-                  throw new Error(
-                    "This account has been deleted and cannot be used."
-                  );
-                }
-
-                // Success - dismiss loading toast and show success
-                toast.dismiss(loadingToast);
-                toast.success("Logged in successfully!", {
-                  position: "bottom-right",
-                  id: "auth-success", // Prevent duplicate toasts
-                });
-
-                // Navigate to last visited path or home
-                const redirectPath = getLastVisitedPath();
-                navigate(redirectPath);
               } catch (err) {
-                // Dismiss loading toast
                 toast.dismiss(loadingToast);
-
-                // Show error
-                const errorMessage =
-                  err.message || "Failed to sign in. Please try again.";
+                const errorMessage = err.errors?.[0]?.longMessage || err.message || "Failed to sign in. Please try again.";
                 setError(errorMessage);
                 toast.error(errorMessage, {
                   position: "bottom-right",

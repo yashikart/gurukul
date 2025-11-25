@@ -101,6 +101,7 @@ else:
         "http://localhost",
         "http://localhost:3000",
         "http://localhost:5173",
+        "http://localhost:5174",
     ]
 app.add_middleware(
     CORSMiddleware,
@@ -747,7 +748,7 @@ async def generate_lesson_stream(
             prompt = f"""
             Create a comprehensive, in-depth educational lesson on "{topic}" in the subject "{subject}".
 
-            {f"Use the following reference content to enhance your explanation:\n\n{reference_content}\n\n" if reference_content else ""}
+            {f"Use the following reference content to enhance your explanation:{chr(10)}{chr(10)}{reference_content}{chr(10)}{chr(10)}" if reference_content else ""}
 
             Structure your response as a detailed educational lesson with:
 
@@ -1472,82 +1473,6 @@ async def summarize_image():
         raise HTTPException(status_code=404, detail="No image has been processed yet.")
     return image_response
 
-@app.get("/process-img-stream")
-async def process_img_stream(
-    file_path: str = None,
-    llm: str = "uniguru"
-):
-    """
-    Stream image processing results line by line for live rendering
-    """
-    from fastapi.responses import StreamingResponse
-    
-    async def generate_content():
-        try:
-            yield f"data: 🔍 Starting image analysis...\n\n"
-            await asyncio.sleep(0.1)
-
-            # Get the latest image response
-            if image_response is None:
-                yield f"data: ❌ No image has been processed yet. Please upload an image first.\n\n"
-                yield f"data: [ERROR]\n\n"
-                return
-
-            yield f"data: 🖼️ Processing image with OCR...\n\n"
-            await asyncio.sleep(0.2)
-
-            yield f"data: 🤖 Using UNIGURU AI model\n\n"
-            await asyncio.sleep(0.2)
-
-            yield f"data: 📝 Generating comprehensive image analysis...\n\n"
-            await asyncio.sleep(0.3)
-
-            # Check if OCR text was found
-            if image_response.ocr_text and image_response.ocr_text != "No readable text found in the image.":
-                yield f"data: 📖 Text extracted from image:\n\n"
-                yield f"data: {image_response.ocr_text}\n\n"
-                yield f"data: \n\n"
-
-            # Clean the answer content (remove markdown formatting)
-            answer = image_response.answer
-
-            # Remove markdown formatting
-            cleaned_answer = answer.replace('**', '').replace('*', '').replace('##', '').replace('#', '')
-
-            # Split content into lines for streaming
-            content_lines = cleaned_answer.split('\n')
-
-            yield f"data: 📊 Analysis Results:\n\n"
-            yield f"data: \n\n"
-
-            # Stream content line by line
-            for i, line in enumerate(content_lines):
-                if line.strip():  # Only send non-empty lines
-                    yield f"data: {line.strip()}\n\n"
-                    await asyncio.sleep(0.05)  # Small delay for live rendering effect
-                else:
-                    yield f"data: \n\n"  # Send empty line
-                    await asyncio.sleep(0.02)
-
-            yield f"data: \n\n"
-            yield f"data: ✅ Image analysis complete!\n\n"
-            yield f"data: 🎵 Audio summary available for download\n\n"
-            yield f"data: [END]\n\n"
-
-        except Exception as e:
-            yield f"data: ❌ Error during streaming: {str(e)}\n\n"
-            yield f"data: [ERROR]\n\n"
-
-    return StreamingResponse(
-        generate_content(),
-        media_type="text/plain",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Content-Type": "text/plain; charset=utf-8"
-        }
-    )
-
 @app.get("/api/stream/{filename}")
 async def stream_audio(filename: str):
     audio_path = os.path.join(TEMP_DIR, filename)
@@ -1572,77 +1497,6 @@ async def download_audio(filename: str):
         path=audio_path,
         media_type="audio/mpeg",
         filename=filename
-    )
-
-@app.get("/process-pdf-stream")
-async def process_pdf_stream(
-    file_path: str = None,
-    llm: str = "uniguru"
-):
-    """
-    Stream PDF processing results line by line for live rendering
-    """
-    from fastapi.responses import StreamingResponse
-    
-    async def generate_content():
-        try:
-            yield f"data: 🔍 Starting document analysis...\n\n"
-            await asyncio.sleep(0.1)
-
-            # Get the latest PDF response
-            if pdf_response is None:
-                yield f"data: ❌ No PDF has been processed yet. Please upload a document first.\n\n"
-                yield f"data: [ERROR]\n\n"
-                return
-
-            yield f"data: 📄 Processing: {pdf_response.title}\n\n"
-            await asyncio.sleep(0.2)
-
-            yield f"data: 🤖 Using UNIGURU AI model\n\n"
-            await asyncio.sleep(0.2)
-
-            yield f"data: 📝 Generating comprehensive summary...\n\n"
-            await asyncio.sleep(0.3)
-
-            # Clean the answer content (remove markdown formatting)
-            answer = pdf_response.answer
-
-            # Remove markdown formatting
-            cleaned_answer = answer.replace('**', '').replace('*', '').replace('##', '').replace('#', '')
-
-            # Split content into lines for streaming
-            content_lines = cleaned_answer.split('\n')
-
-            yield f"data: \n\n"
-            yield f"data: {pdf_response.title}\n\n"
-            yield f"data: \n\n"
-
-            # Stream content line by line
-            for i, line in enumerate(content_lines):
-                if line.strip():  # Only send non-empty lines
-                    yield f"data: {line.strip()}\n\n"
-                    await asyncio.sleep(0.05)  # Small delay for live rendering effect
-                else:
-                    yield f"data: \n\n"  # Send empty line
-                    await asyncio.sleep(0.02)
-
-            yield f"data: \n\n"
-            yield f"data: ✅ Document analysis complete!\n\n"
-            yield f"data: 🎵 Audio summary available for download\n\n"
-            yield f"data: [END]\n\n"
-
-        except Exception as e:
-            yield f"data: ❌ Error during streaming: {str(e)}\n\n"
-            yield f"data: [ERROR]\n\n"
-
-    return StreamingResponse(
-        generate_content(),
-        media_type="text/plain",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Content-Type": "text/plain; charset=utf-8"
-        }
     )
 
 # ==== OpenAI-compatible Chat Completions Proxy (CORS-enabled) ====

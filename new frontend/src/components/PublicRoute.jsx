@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { supabase } from "../supabaseClient";
+import { useAuth, SignedIn, SignedOut } from "@clerk/clerk-react";
 import { toast } from "react-hot-toast";
 import { getLastVisitedPath } from "../utils/routeUtils";
 
@@ -60,94 +60,28 @@ export default function PublicRoute({ children }) {
       setAuthStatus("unauthenticated");
     }, 5000);
 
-    // Check if the user is authenticated
-    const checkAuth = async () => {
-      try {
-        const { data, error } = await supabase.auth.getSession();
-
-        if (error) {
-          console.error("Error checking auth in PublicRoute:", error);
-          setAuthStatus("unauthenticated");
-          return;
-        }
-
-        if (data.session) {
-          // User is authenticated
-          setAuthStatus("authenticated");
-
-          // Show a toast message
-          toast.success("You are already signed in", {
-            position: "bottom-right",
-            icon: "✅",
-            id: "already-signed-in",
-          });
-        } else {
-          // User is not authenticated
-          setAuthStatus("unauthenticated");
-        }
-      } catch (error) {
-        console.error("Error in auth check:", error);
-        setAuthStatus("unauthenticated");
-      } finally {
-        // Clear the hard timeout
-        clearTimeout(hardTimeoutId);
-      }
-    };
-
-    // Run the auth check
-    checkAuth();
-
-    // Set up auth state listener
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === "SIGNED_IN") {
-          setAuthStatus("authenticated");
-        } else if (event === "SIGNED_OUT") {
-          setAuthStatus("unauthenticated");
-        }
-      }
-    );
-
-    // Clean up
-    return () => {
-      clearTimeout(hardTimeoutId);
-      authListener?.subscription?.unsubscribe();
-    };
+    // With Clerk we can directly determine auth state in render using SignedIn/SignedOut
+    // Here we just clear the timeout immediately
+    clearTimeout(hardTimeoutId);
   }, []);
 
-  // Handle signout path directly
-  if (location.pathname === "/signout") {
-    // Sign out the user
-    supabase.auth
-      .signOut()
-      .then(() => {
-        toast.success("Signed out successfully", {
-          icon: "👋",
-          position: "bottom-right",
-        });
-      })
-      .catch((error) => {
-        console.error("Error signing out:", error);
-      });
+  // Handle signout path directly is now managed by Clerk's signOut elsewhere if needed
 
-    // Redirect to sign-in page
-    return <Navigate to="/signin" replace />;
-  }
-
-  // Handle different auth states
-  switch (authStatus) {
-    case "checking":
-      return <SimpleLoadingScreen />;
-    case "authenticated":
-      const redirectPath = getLastVisitedPath();
-      return <Navigate to={redirectPath} replace />;
-    case "unauthenticated":
-      // Mark as visited when showing the GetStarted page
-      if (!hasVisited) {
-        localStorage.setItem("gurukul_visited", "true");
-      }
-      return children;
-    default:
-      return children;
-  }
+  // With Clerk, we can conditionally render based on auth state
+  return (
+    <>
+      <SignedIn>
+        <Navigate to={getLastVisitedPath()} replace />
+      </SignedIn>
+      <SignedOut>
+        {/* Mark as visited when showing the GetStarted page */}
+        {(() => {
+          if (!hasVisited) {
+            localStorage.setItem("gurukul_visited", "true");
+          }
+          return children;
+        })()}
+      </SignedOut>
+    </>
+  );
 }

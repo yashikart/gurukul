@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, NavLink, useLocation } from "react-router-dom";
-import { supabase } from "../supabaseClient";
+import { useUser, useClerk } from "@clerk/clerk-react";
 import gsap from "gsap";
 import { useGSAP } from "../hooks/useGSAP";
 import { Menu, X } from "lucide-react";
@@ -10,6 +10,8 @@ export default function Header({ onToggleSidebar, sidebarCollapsed }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [avatarUrl, setAvatarUrl] = useState("");
+  const { isSignedIn, user } = useUser();
+  const { signOut } = useClerk();
 
   // Refs for GSAP animations
   const headerRef = useRef(null);
@@ -160,33 +162,12 @@ export default function Header({ onToggleSidebar, sidebarCollapsed }) {
   }, [location.pathname]);
 
   useEffect(() => {
-    const fetchAvatar = async (session) => {
-      const user = session?.user;
-      if (!user) {
-        setAvatarUrl("");
-        return;
-      }
-      setAvatarUrl(
-        user.user_metadata?.avatar_url ||
-          "https://ui-avatars.com/api/?name=User"
-      );
-    };
-
-    // Get current session using the newer API
-    supabase.auth.getSession().then(({ data }) => {
-      fetchAvatar(data.session);
-    });
-
-    // Use the newer auth state change API
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        fetchAvatar(session);
-      }
-    );
-    return () => {
-      if (listener && listener.unsubscribe) listener.unsubscribe();
-    };
-  }, []);
+    if (isSignedIn && user) {
+      setAvatarUrl(user.imageUrl || "https://ui-avatars.com/api/?name=User");
+    } else {
+      setAvatarUrl("");
+    }
+  }, [isSignedIn, user]);
 
   const handleLogout = async () => {
     // Click animation - faster and smoother
@@ -203,13 +184,12 @@ export default function Header({ onToggleSidebar, sidebarCollapsed }) {
               ease: "power2.out",
             });
           }
-          await supabase.auth.signOut();
+          await signOut();
           navigate("/signin");
         },
       });
     } else {
-      // If button ref is not available, just sign out
-      await supabase.auth.signOut();
+      await signOut();
       navigate("/signin");
     }
   };

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
-import { supabase } from "../supabaseClient";
+import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import { getLastVisitedPath } from "../utils/routeUtils";
+import { useClerk } from "@clerk/clerk-react";
 
 // Simple loading component to avoid circular dependencies
 function SimpleLoadingScreen() {
@@ -45,6 +45,8 @@ function SimpleLoadingScreen() {
 export default function AuthCallback() {
   const [status, setStatus] = useState("processing"); // "processing", "success", "error"
   const [redirectPath, setRedirectPath] = useState("/home");
+  const navigate = useNavigate();
+  const { handleRedirectCallback } = useClerk();
 
   useEffect(() => {
     // Set a hard timeout to prevent infinite loading
@@ -58,36 +60,14 @@ export default function AuthCallback() {
     // Handle the OAuth callback
     const handleAuthCallback = async () => {
       try {
-        // Get the current session
-        const { data, error } = await supabase.auth.getSession();
-
-        if (error) {
-          console.error("Error getting session in AuthCallback:", error);
-          setStatus("error");
-          toast.error("Authentication failed. Please try again.", {
-            position: "bottom-right",
-          });
-          return;
-        }
-
-        // Check if we have a session
-        if (data?.session) {
-          // Success - set the redirect path and status
-          const path = getLastVisitedPath();
-          setRedirectPath(path);
-          setStatus("success");
-
-          toast.success("Logged in successfully!", {
-            position: "bottom-right",
-            id: "auth-success", // Prevent duplicate toasts
-          });
-        } else {
-          // No session found
-          setStatus("error");
-          toast.error("Authentication failed. Please try again.", {
-            position: "bottom-right",
-          });
-        }
+        await handleRedirectCallback();
+        const path = getLastVisitedPath();
+        setRedirectPath(path);
+        setStatus("success");
+        toast.success("Logged in successfully!", {
+          position: "bottom-right",
+          id: "auth-success",
+        });
       } catch (err) {
         console.error("Error in auth callback:", err);
         setStatus("error");

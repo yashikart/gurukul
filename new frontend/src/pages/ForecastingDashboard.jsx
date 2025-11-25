@@ -661,61 +661,149 @@ const ForecastingDashboard = () => {
           </GlassContainer>
         )}
 
-        {/* Instructions */}
+        {/* About Advanced Forecasting Dashboard */}
         <GlassContainer className="p-6" noFixedHeight={true}>
           <h3 className="text-xl font-bold text-white mb-4 flex items-center">
             <Target className="mr-2" />
-            How to Verify Advanced Forecasting
+            About the Advanced Forecasting Dashboard
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-6">
+            {/* Overview */}
             <div>
-              <h4 className="text-lg font-semibold text-white mb-3">Backend Verification</h4>
-              <div className="space-y-2 text-sm text-white/80">
-                <div>1. Start the enhanced orchestration system:</div>
-                <code className="block bg-black/30 p-2 rounded text-green-400">
-                  cd Backend/orchestration/unified_orchestration_system<br/>
-                  python simple_api.py --port 8002
-                </code>
-
-                <div className="mt-3">2. Check forecasting status:</div>
-                <code className="block bg-black/30 p-2 rounded text-green-400">
-                  curl http://localhost:8002/forecast/status
-                </code>
-
-                <div className="mt-3">3. Run comprehensive tests:</div>
-                <code className="block bg-black/30 p-2 rounded text-green-400">
-                  python test_advanced_forecasting.py
-                </code>
+              <h4 className="text-lg font-semibold text-white mb-3">What is the Advanced Forecasting Dashboard?</h4>
+              <div className="text-white/80 leading-relaxed">
+                The Advanced Forecasting Dashboard is a sophisticated time series prediction system that leverages both Prophet and ARIMA models 
+                to provide accurate financial and market forecasting. Built on Facebook's Prophet library and statsmodels' ARIMA implementation, 
+                it features intelligent model selection, ensemble modeling, and comprehensive performance evaluation to deliver reliable predictions 
+                for various financial instruments and market data.
               </div>
             </div>
 
+            {/* Key Features Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h4 className="text-lg font-semibold text-white mb-3">Core Features</h4>
+                <div className="space-y-2 text-sm text-white/80">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle size={16} className="text-green-400" />
+                    <span>Smart Model Selection - Automatically chooses between Prophet and ARIMA</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle size={16} className="text-green-400" />
+                    <span>Ensemble Modeling - Combines multiple forecasting approaches</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle size={16} className="text-green-400" />
+                    <span>Real-time Performance Metrics - MAE, RMSE, MAPE evaluation</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle size={16} className="text-green-400" />
+                    <span>Interactive Visualizations - Advanced charts and trend analysis</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle size={16} className="text-green-400" />
+                    <span>Confidence Intervals - Uncertainty quantification for predictions</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle size={16} className="text-green-400" />
+                    <span>Multilingual Support - Forecasts with localized explanations</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-lg font-semibold text-white mb-3">Model Capabilities</h4>
+                <div className="space-y-2 text-sm text-white/80">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle size={16} className="text-blue-400" />
+                    <span><strong>Prophet Model:</strong> Handles seasonal patterns and trend analysis</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle size={16} className="text-blue-400" />
+                    <span><strong>ARIMA Model:</strong> Optimal for stationary data and short-term forecasts</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle size={16} className="text-blue-400" />
+                    <span><strong>Adaptive Selection:</strong> Chooses best model based on data characteristics</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle size={16} className="text-blue-400" />
+                    <span><strong>Fallback Mechanisms:</strong> Multiple layers of error handling</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle size={16} className="text-blue-400" />
+                    <span><strong>Cross-validation:</strong> Rigorous model performance testing</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Technical Specifications */}
             <div>
-              <h4 className="text-lg font-semibold text-white mb-3">Frontend Features</h4>
-              <div className="space-y-2 text-sm text-white/80">
-                <div className="flex items-center space-x-2">
-                  <CheckCircle size={16} className="text-green-400" />
-                  <span>Interactive forecasting dashboard</span>
+              <h4 className="text-lg font-semibold text-white mb-3">Technical Architecture</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg p-4 border border-white/20">
+                  <h5 className="font-semibold text-white mb-2">Data Processing</h5>
+                  <ul className="text-white/70 space-y-1">
+                    <li>• Automatic data quality assessment</li>
+                    <li>• Missing value handling</li>
+                    <li>• Outlier detection and treatment</li>
+                    <li>• Seasonality pattern recognition</li>
+                  </ul>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircle size={16} className="text-green-400" />
-                  <span>Prophet vs ARIMA model comparison</span>
+                <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 rounded-lg p-4 border border-white/20">
+                  <h5 className="font-semibold text-white mb-2">Model Performance</h5>
+                  <ul className="text-white/70 space-y-1">
+                    <li>• Prophet: 2-5 seconds typical response</li>
+                    <li>• ARIMA: 1-3 seconds parameter optimization</li>
+                    <li>• Caching for improved performance</li>
+                    <li>• &lt;1 second fallback forecasts</li>
+                  </ul>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircle size={16} className="text-green-400" />
-                  <span>Real-time accuracy metrics</span>
+                <div className="bg-gradient-to-r from-orange-500/20 to-red-500/20 rounded-lg p-4 border border-white/20">
+                  <h5 className="font-semibold text-white mb-2">Quality Assurance</h5>
+                  <ul className="text-white/70 space-y-1">
+                    <li>• Continuous accuracy monitoring</li>
+                    <li>• Confidence level categorization</li>
+                    <li>• Resource usage optimization</li>
+                    <li>• Comprehensive test framework</li>
+                  </ul>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircle size={16} className="text-green-400" />
-                  <span>Smart model selection visualization</span>
+              </div>
+            </div>
+
+            {/* Use Cases */}
+            <div>
+              <h4 className="text-lg font-semibold text-white mb-3">Primary Use Cases</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2 text-sm text-white/80">
+                  <div className="flex items-start space-x-2">
+                    <DollarSign size={16} className="text-yellow-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <strong>Financial Market Analysis:</strong> Stock price predictions, market trend analysis, and investment strategy optimization
+                    </div>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <Activity size={16} className="text-green-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <strong>Performance Metrics:</strong> System load forecasting, performance trend analysis, and capacity planning
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircle size={16} className="text-green-400" />
-                  <span>Confidence intervals and trends</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircle size={16} className="text-green-400" />
-                  <span>Demo mode when backend unavailable</span>
+                <div className="space-y-2 text-sm text-white/80">
+                  <div className="flex items-start space-x-2">
+                    <Target size={16} className="text-blue-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <strong>Risk Assessment:</strong> Probability-based forecasting for risk management and decision support
+                    </div>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <Brain size={16} className="text-purple-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <strong>Educational Analytics:</strong> Learning progress prediction and personalized content recommendation
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

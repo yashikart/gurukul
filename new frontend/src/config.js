@@ -34,12 +34,6 @@ export const AGENT_API_BASE_URL = getEnvVar(
   isDevelopment ? 'http://localhost:8005' : 'https://api.gurukul.com'
 );
 
-// Pipeline API Base URL (Deployed on Render)
-export const PIPELINE_API_BASE_URL = getEnvVar(
-  'VITE_PIPELINE_API_BASE_URL',
-  isDevelopment ? 'http://localhost:8000' : 'https://pipeline-24-master-1.onrender.com'
-);
-
 // UniGuru API Base URL
 export const UNIGURU_API_BASE_URL = getEnvVar(
   'VITE_UNIGURU_API_BASE_URL',
@@ -67,11 +61,6 @@ export const API_ENDPOINTS = {
   
   // Agent endpoints
   agent: `${AGENT_API_BASE_URL}/api/agent`,
-  
-  // Pipeline endpoints (Deployed on Render)
-  pipeline: `${PIPELINE_API_BASE_URL}/api`,
-  lessonGeneration: `${PIPELINE_API_BASE_URL}/generate_lesson`,
-  asyncLessonGeneration: `${PIPELINE_API_BASE_URL}/generate_lesson_async`,
   
   // UniGuru endpoints
   uniguru: `${UNIGURU_API_BASE_URL}/api/uniguru`,

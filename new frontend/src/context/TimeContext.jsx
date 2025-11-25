@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import { TimeContext } from "./TimeContextDef";
+import { useUser } from "@clerk/clerk-react";
 
 export const TimeProvider = ({ children }) => {
   const [totalTimeToday, setTotalTimeToday] = useState(0);
@@ -70,42 +71,23 @@ export const TimeProvider = ({ children }) => {
     setIsLoading(false);
   }, []);
 
+  const { isSignedIn, user } = useUser();
+
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
 
     const initializeTime = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.user) {
-        await fetchTodayTime(session.user.id);
-        await fetchTimeHistory(session.user.id);
+      if (isSignedIn && user) {
+        await fetchTodayTime(user.id);
+        await fetchTimeHistory(user.id);
       } else {
         setIsLoading(false);
       }
     };
 
     initializeTime();
-
-    const subscription = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === "SIGNED_IN" && session?.user) {
-          await fetchTodayTime(session.user.id);
-          await fetchTimeHistory(session.user.id);
-        } else if (event === "SIGNED_OUT") {
-          setTotalTimeToday(0);
-          setCurrentSessionTime(0);
-          setTimeHistory([]);
-          setIsLoading(false);
-        }
-      }
-    );
-
-    return () => {
-      subscription.data?.subscription?.unsubscribe();
-    };
-  }, [fetchTodayTime, fetchTimeHistory]);
+  }, [fetchTodayTime, fetchTimeHistory, isSignedIn, user]);
 
   const value = {
     totalTimeToday,

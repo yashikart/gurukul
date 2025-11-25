@@ -5,12 +5,12 @@ import {
   selectAuthStatus,
   selectAuthError,
   selectIsAuthenticated,
-  signIn,
-  signOut,
+  signIn as reduxSignIn,
+  signOut as reduxSignOut,
   fetchCurrentUser,
 } from "../store/authSlice";
 import { toast } from "react-hot-toast";
-import { supabase } from "../supabaseClient";
+import { useSignIn, useSignUp, useClerk } from "@clerk/clerk-react";
 
 /**
  * Custom hook for authentication
@@ -26,26 +26,27 @@ export const useAuth = () => {
   /**
    * Sign in with email and password
    */
+  const { isLoaded: signInLoaded, signIn, setActive } = useSignIn();
+  const { signOut: clerkSignOut } = useClerk();
+
   const login = useCallback(
     async (email, password) => {
       try {
-        const resultAction = await dispatch(signIn({ email, password }));
-        if (signIn.fulfilled.match(resultAction)) {
-          toast.success("Signed in successfully", {
-            id: "auth-success", // Prevent duplicate toasts
-          });
-          return { success: true, user: resultAction.payload };
-        } else {
-          const errorMessage = resultAction.payload || "Failed to sign in";
-          toast.error(errorMessage);
-          return { success: false, error: errorMessage };
+        if (!signInLoaded) return { success: false, error: "Auth not ready" };
+        const res = await signIn.create({ identifier: email, password });
+        if (res?.status === "complete") {
+          await setActive({ session: res.createdSessionId });
+          toast.success("Signed in successfully", { id: "auth-success" });
+          return { success: true };
         }
+        return { success: false, error: "Sign in incomplete" };
       } catch (error) {
-        toast.error("An unexpected error occurred");
-        return { success: false, error: error.message };
+        const msg = error.errors?.[0]?.longMessage || error.message || "Failed to sign in";
+        toast.error(msg);
+        return { success: false, error: msg };
       }
     },
-    [dispatch]
+    [signInLoaded, signIn, setActive]
   );
 
   /**
@@ -53,84 +54,57 @@ export const useAuth = () => {
    */
   const logout = useCallback(async () => {
     try {
-      const resultAction = await dispatch(signOut());
-      if (signOut.fulfilled.match(resultAction)) {
-        toast.success("Signed out successfully");
-        return { success: true };
-      } else {
-        const errorMessage = resultAction.payload || "Failed to sign out";
-        toast.error(errorMessage);
-        return { success: false, error: errorMessage };
-      }
+      await clerkSignOut();
+      toast.success("Signed out successfully");
+      return { success: true };
     } catch (error) {
-      toast.error("An unexpected error occurred");
-      return { success: false, error: error.message };
+      const msg = error.message || "Failed to sign out";
+      toast.error(msg);
+      return { success: false, error: msg };
     }
-  }, [dispatch]);
+  }, [clerkSignOut]);
 
   /**
    * Sign up with email and password
    */
+  const { isLoaded: signUpLoaded, signUp } = useSignUp();
   const signup = useCallback(async (email, password) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (error) {
-        toast.error(error.message);
-        return { success: false, error: error.message };
-      }
-
-      toast.success(
-        "Signed up successfully! Check your email for confirmation."
-      );
-      return { success: true, user: data.user };
+      if (!signUpLoaded) return { success: false, error: "Auth not ready" };
+      await signUp.create({ emailAddress: email, password });
+      await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+      toast.success("Signed up successfully! Check your email for the code.");
+      return { success: true };
     } catch (error) {
-      toast.error("An unexpected error occurred");
-      return { success: false, error: error.message };
+      const msg = error.errors?.[0]?.longMessage || error.message || "Sign up failed";
+      toast.error(msg);
+      return { success: false, error: msg };
     }
-  }, []);
+  }, [signUpLoaded, signUp]);
 
   /**
    * Reset password
    */
+  const { client } = useClerk();
   const resetPassword = useCallback(async (email) => {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + "/reset-password",
-      });
-
-      if (error) {
-        toast.error(error.message);
-        return { success: false, error: error.message };
-      }
-
+      await client.sendPasswordResetEmail({ emailAddress: email });
       toast.success("Password reset email sent! Check your inbox.");
       return { success: true };
     } catch (error) {
-      toast.error("An unexpected error occurred");
-      return { success: false, error: error.message };
+      const msg = error.errors?.[0]?.longMessage || error.message || "Failed to send reset email";
+      toast.error(msg);
+      return { success: false, error: msg };
     }
-  }, []);
+  }, [client]);
 
   /**
    * Refresh the current user
    */
   const refreshUser = useCallback(async () => {
-    try {
-      const resultAction = await dispatch(fetchCurrentUser());
-      if (fetchCurrentUser.fulfilled.match(resultAction)) {
-        return { success: true, user: resultAction.payload };
-      } else {
-        const errorMessage = resultAction.payload || "Failed to refresh user";
-        return { success: false, error: errorMessage };
-      }
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  }, [dispatch]);
+    // With Clerk, user state updates via hooks; no manual refresh needed
+    return { success: true };
+  }, []);
 
   return {
     user,

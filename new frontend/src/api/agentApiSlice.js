@@ -39,15 +39,24 @@ export const agentApiSlice = createApi({
     }),
 
     startAgentSimulation: builder.mutation({
-      query: ({ agentId, userId }) => ({
-        url: "/start_agent_simulation",
-        method: "POST",
-        body: {
-          agent_id: agentId,
-          user_id: userId || "guest-user",
-          timestamp: new Date().toISOString(),
-        },
-      }),
+      query: (payload) => {
+        // Extract required fields and map them to backend format
+        const { agentId, userId, financialProfile, eduMentorProfile, ...additionalData } = payload;
+        return {
+          url: "/start_agent_simulation",
+          method: "POST",
+          body: {
+            agent_id: agentId,
+            user_id: userId || "guest-user",
+            timestamp: new Date().toISOString(),
+            // Map camelCase frontend fields to snake_case backend fields
+            financial_profile: financialProfile || null,
+            edu_mentor_profile: eduMentorProfile || null,
+            // Include any other additional data
+            additional_data: Object.keys(additionalData).length > 0 ? additionalData : null
+          },
+        };
+      },
       invalidatesTags: ["AgentOutput", "AgentLogs"],
     }),
 

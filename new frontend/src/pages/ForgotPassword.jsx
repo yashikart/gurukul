@@ -1,13 +1,14 @@
 import React, { useState } from "react";
-import { supabase } from "../supabaseClient";
 import { Mail, Key } from "lucide-react";
 import { toast } from "react-hot-toast";
 import GlassInput from "../components/GlassInput";
 import GlassButton from "../components/GlassButton";
+import { useClerk } from "@clerk/clerk-react";
 
 export default function ForgotPassword() {
   const [emailSent, setEmailSent] = useState(false);
   const [error, setError] = useState("");
+  const { client } = useClerk();
 
   const handleReset = async (e) => {
     e.preventDefault();
@@ -30,24 +31,17 @@ export default function ForgotPassword() {
     });
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      await client.sendPasswordResetEmail({ emailAddress: email });
 
       // Dismiss loading toast
       toast.dismiss(loadingToast);
 
-      if (error) {
-        setError(error.message);
-        toast.error(error.message, {
-          position: "bottom-right",
-        });
-      } else {
-        setEmailSent(true);
-        toast.success("Reset instructions sent! Check your email inbox.", {
-          position: "bottom-right",
-          icon: "✉️",
-          duration: 5000,
-        });
-      }
+      setEmailSent(true);
+      toast.success("Reset instructions sent! Check your email inbox.", {
+        position: "bottom-right",
+        icon: "✉️",
+        duration: 5000,
+      });
     } catch (err) {
       // Dismiss loading toast
       toast.dismiss(loadingToast);

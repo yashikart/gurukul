@@ -132,11 +132,196 @@ def parse_pdf(file_path: str) -> Dict:
         logger.error(f"Error parsing PDF: {e}")
         return {"title": "", "body": "", "sections": []}
 
+def analyze_image_content(image_path: str) -> dict:
+    """Analyze image content including basic properties and characteristics"""
+    try:
+        with Image.open(image_path) as img:
+            # Get basic image properties
+            width, height = img.size
+            format_type = img.format
+            mode = img.mode
+            
+            # Calculate aspect ratio
+            aspect_ratio = width / height if height > 0 else 1
+            
+            # Determine image orientation
+            if aspect_ratio > 1.3:
+                orientation = "landscape"
+            elif aspect_ratio < 0.7:
+                orientation = "portrait"
+            else:
+                orientation = "square"
+            
+            # Analyze color characteristics
+            colors = img.getcolors(maxcolors=256*256*256)
+            dominant_colors = []
+            if colors:
+                # Sort by frequency and get top colors
+                sorted_colors = sorted(colors, key=lambda x: x[0], reverse=True)[:5]
+                for count, color in sorted_colors:
+                    if isinstance(color, tuple) and len(color) >= 3:
+                        r, g, b = color[:3]
+                        # Simple color classification
+                        if r > 200 and g > 200 and b > 200:
+                            color_name = "light/white"
+                        elif r < 50 and g < 50 and b < 50:
+                            color_name = "dark/black"
+                        elif r > g and r > b:
+                            color_name = "reddish"
+                        elif g > r and g > b:
+                            color_name = "greenish"
+                        elif b > r and b > g:
+                            color_name = "bluish"
+                        else:
+                            color_name = "neutral"
+                        dominant_colors.append(color_name)
+            
+            # Create analysis result
+            analysis = {
+                "dimensions": f"{width}x{height}",
+                "format": format_type,
+                "orientation": orientation,
+                "aspect_ratio": round(aspect_ratio, 2),
+                "color_mode": mode,
+                "dominant_colors": dominant_colors[:3],  # Top 3 colors
+                "file_size": os.path.getsize(image_path) if os.path.exists(image_path) else 0
+            }
+            
+            return analysis
+            
+    except Exception as e:
+        logger.error(f"Error analyzing image content: {e}")
+        return {
+            "dimensions": "unknown",
+            "format": "unknown", 
+            "orientation": "unknown",
+            "aspect_ratio": 1,
+            "color_mode": "unknown",
+            "dominant_colors": [],
+            "file_size": 0
+        }
+
+def generate_image_description(image_analysis: dict, ocr_text: str = "") -> str:
+    """Generate a comprehensive description of the image based on analysis and OCR"""
+    try:
+        description_parts = []
+        
+        # Basic image info
+        description_parts.append(f"This is a {image_analysis['format']} image with dimensions {image_analysis['dimensions']}")
+        description_parts.append(f"in {image_analysis['orientation']} orientation")
+        
+        # Color information
+        if image_analysis['dominant_colors']:
+            colors_str = ", ".join(image_analysis['dominant_colors'])
+            description_parts.append(f"The image predominantly features {colors_str} colors")
+        
+        # Text content
+        if ocr_text.strip():
+            preview_text = ocr_text[:200] + ('...' if len(ocr_text) > 200 else '')
+            description_parts.append(f"The image contains readable text: '{preview_text}'")
+        else:
+            description_parts.append("The image does not contain any readable text or the text is not clear enough for extraction")
+        
+        # File size context
+        file_size = image_analysis['file_size']
+        if file_size > 0:
+            size_mb = file_size / (1024 * 1024)
+            if size_mb > 1:
+                description_parts.append(f"The image file size is {size_mb:.1f}MB")
+            else:
+                size_kb = file_size / 1024
+                description_parts.append(f"The image file size is {size_kb:.1f}KB")
+        
+        # Combine all parts
+        full_description = ". ".join(description_parts) + "."
+        return full_description
+        
+    except Exception as e:
+        logger.error(f"Error generating image description: {e}")
+        return "Unable to generate a detailed description of this image."
+
 def extract_text_easyocr(image_path: str) -> str:
-    reader = easyocr.Reader(['en' , 'hi'], gpu=False)
-    result = reader.readtext(image_path, detail=0)
-    print("OCR result list:", result)
-    return " ".join(result)
+    """Enhanced OCR function with better error handling and image preprocessing"""
+    try:
+        # Verify the image file exists and is readable
+        if not os.path.exists(image_path):
+            logger.error(f"Image file not found: {image_path}")
+            return ""
+        
+        # Check file size
+        file_size = os.path.getsize(image_path)
+        if file_size == 0:
+            logger.error(f"Image file is empty: {image_path}")
+            return ""
+        
+        logger.info(f"Processing image: {image_path} (size: {file_size} bytes)")
+        
+        # Try to open and verify the image first
+        try:
+            with Image.open(image_path) as img:
+                logger.info(f"Image format: {img.format}, mode: {img.mode}, size: {img.size}")
+                
+                # Convert image to RGB if it's not already (helps with some formats)
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                    # Save the converted image temporarily
+                    converted_path = image_path.replace(os.path.splitext(image_path)[1], '_converted.jpg')
+                    img.save(converted_path, 'JPEG')
+                    image_path = converted_path
+                    logger.info(f"Converted image to RGB and saved as: {converted_path}")
+        except Exception as img_error:
+            logger.error(f"Failed to open/process image: {img_error}")
+            return ""
+        
+        # Initialize EasyOCR reader with enhanced settings
+        try:
+            # Support multiple languages: English and Hindi
+            reader = easyocr.Reader(['en', 'hi'], gpu=False)
+            logger.info("EasyOCR reader initialized successfully")
+        except Exception as reader_error:
+            logger.error(f"Failed to initialize EasyOCR reader: {reader_error}")
+            return ""
+        
+        # Perform OCR with enhanced parameters
+        try:
+            # Use detail=0 to get only text, detail=1 to get bounding boxes too
+            result = reader.readtext(
+                image_path, 
+                detail=0,
+                paragraph=True,  # Group text into paragraphs
+                width_ths=0.7,   # Text width threshold
+                height_ths=0.7   # Text height threshold
+            )
+            
+            logger.info(f"OCR completed. Found {len(result)} text elements")
+            logger.info(f"OCR result list: {result}")
+            
+            # Join the results with proper spacing
+            if result:
+                text = " ".join(str(item) for item in result if item.strip())
+                logger.info(f"Final extracted text length: {len(text)} characters")
+                return text
+            else:
+                logger.info("No text found in image")
+                return ""
+                
+        except Exception as ocr_error:
+            logger.error(f"OCR processing failed: {ocr_error}")
+            return ""
+            
+    except Exception as e:
+        logger.error(f"Unexpected error in extract_text_easyocr: {e}")
+        return ""
+    
+    finally:
+        # Clean up converted image if it was created
+        converted_path = image_path.replace(os.path.splitext(image_path)[1], '_converted.jpg')
+        if os.path.exists(converted_path) and converted_path != image_path:
+            try:
+                os.remove(converted_path)
+                logger.info(f"Cleaned up converted image: {converted_path}")
+            except:
+                pass  # Ignore cleanup errors
 
 #def extract_text_tesseract(image_path: str) -> str:
 #    try:

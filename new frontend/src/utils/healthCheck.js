@@ -5,7 +5,7 @@
  * and ensure the frontend is properly connected to all required APIs.
  */
 
-import { API_BASE_URL, CHAT_API_BASE_URL, FINANCIAL_API_BASE_URL, AGENT_API_BASE_URL, PIPELINE_API_BASE_URL } from '../config';
+import { API_BASE_URL, CHAT_API_BASE_URL, FINANCIAL_API_BASE_URL, AGENT_API_BASE_URL } from '../config';
 
 /**
  * Check the health of a specific backend service
@@ -42,7 +42,6 @@ export const checkAllServices = async () => {
     chat: { url: CHAT_API_BASE_URL, name: 'Chat API' },
     financial: { url: FINANCIAL_API_BASE_URL, name: 'Financial Simulator' },
     agent: { url: AGENT_API_BASE_URL, name: 'Agent API' },
-    pipeline: { url: PIPELINE_API_BASE_URL, name: 'Pipeline Service (Render)' },
   };
   
   const results = {};

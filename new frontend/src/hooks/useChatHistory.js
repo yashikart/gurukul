@@ -9,7 +9,7 @@ import { toast } from 'react-hot-toast';
 import chatHistoryStorage, { DEFAULT_WELCOME_MESSAGE } from '../utils/chatHistoryStorage';
 import chatErrorRecovery from '../utils/chatErrorRecovery';
 import chatPerformanceOptimizer from '../utils/chatPerformanceOptimizer';
-import { supabase } from '../supabaseClient';
+import { useUser } from '@clerk/clerk-react';
 
 /**
  * Main hook for managing chat history
@@ -233,56 +233,13 @@ export const useChatHistory = () => {
 
 
   // Initialize on mount and when userId changes
+  const { isSignedIn, user } = useUser();
+
   useEffect(() => {
-    const getUserId = async () => {
-      try {
-        // Get the current session
-        const { data: sessionData } = await supabase.auth.getSession();
-        
-        let currentUserId = 'guest-user';
-        
-        if (sessionData?.session?.user?.id) {
-          currentUserId = sessionData.session.user.id;
-        } else {
-          // Fallback to getUser if session doesn't have what we need
-          const { data: userData } = await supabase.auth.getUser();
-          if (userData?.user?.id) {
-            currentUserId = userData.user.id;
-          }
-        }
-        
-        setUserId(currentUserId);
-        await initializeChatHistory(currentUserId);
-      } catch (error) {
-        console.error('Error getting user ID:', error);
-        setUserId('guest-user');
-        await initializeChatHistory('guest-user');
-      }
-    };
-
-    getUserId();
-
-    // Listen for auth state changes
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log(`Auth state changed: ${event}`);
-        
-        let newUserId = 'guest-user';
-        if (session?.user?.id) {
-          newUserId = session.user.id;
-        }
-        
-        setUserId(newUserId);
-        await initializeChatHistory(newUserId);
-      }
-    );
-
-    return () => {
-      if (authListener && authListener.subscription) {
-        authListener.subscription.unsubscribe();
-      }
-    };
-  }, [initializeChatHistory]);
+    const currentUserId = isSignedIn && user ? user.id : 'guest-user';
+    setUserId(currentUserId);
+    initializeChatHistory(currentUserId);
+  }, [initializeChatHistory, isSignedIn, user]);
 
   // Optimize messages for rendering when they change
   useEffect(() => {

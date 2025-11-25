@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { useUser } from "@clerk/clerk-react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -30,13 +31,14 @@ import MobileInputDemo from "./pages/MobileInputDemo";
 import NotFound from "./pages/NotFound";
 import SignIn from "./pages/SignIn";
 import SignUp from "./pages/SignUp";
+import { SignIn as ClerkSignIn, SignUp as ClerkSignUp } from "@clerk/clerk-react";
 import ForgotPassword from "./pages/ForgotPassword";
 import GetStarted from "./pages/GetStarted";
 import AuthCallback from "./pages/AuthCallback";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PublicRoute from "./components/PublicRoute";
 import SummaryView from "./pages/SummaryView";
-import { fetchCurrentUser } from "./store/authSlice";
+import { setUser, clearUser } from "./store/authSlice";
 
 // Development utilities available in console if needed
 // if (import.meta.env.DEV) {
@@ -46,11 +48,25 @@ import { fetchCurrentUser } from "./store/authSlice";
 
 export default function App() {
   const dispatch = useDispatch();
+  const { isSignedIn, user } = useUser();
 
-  // Fetch the current user when the app loads
+  // Sync Clerk user into Redux store
   useEffect(() => {
-    dispatch(fetchCurrentUser());
-  }, [dispatch]);
+    if (isSignedIn && user) {
+      dispatch(
+        setUser({
+          id: user.id,
+          email: user.primaryEmailAddress?.emailAddress || null,
+          user_metadata: {
+            avatar_url: user.imageUrl,
+            full_name: user.fullName || user.username || null,
+          },
+        })
+      );
+    } else {
+      dispatch(clearUser());
+    }
+  }, [isSignedIn, user, dispatch]);
 
   return (
     <ThemeProvider>
@@ -155,6 +171,9 @@ export default function App() {
             <Routes>
               <Route path="/signin" element={<SignIn />} />
               <Route path="/signup" element={<SignUp />} />
+              {/* Alternatively, Clerk's prebuilt components: */}
+              {/* <Route path="/clerk/sign-in" element={<ClerkSignIn routing="path" path="/clerk/sign-in" />} /> */}
+              {/* <Route path="/clerk/sign-up" element={<ClerkSignUp routing="path" path="/clerk/sign-up" />} /> */}
               <Route path="/forgotpassword" element={<ForgotPassword />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route

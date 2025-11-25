@@ -1,28 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Navigate } from "react-router-dom";
-import { supabase } from "../supabaseClient";
+import { SignedIn, SignedOut, RedirectToSignIn } from "@clerk/clerk-react";
 
 export default function ProtectedRoute({ children }) {
-  const [loading, setLoading] = useState(true);
-  const [session, setSession] = useState(null);
-
-  useEffect(() => {
-    const currentSession = supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-        setLoading(false);
-      }
-    );
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, []);
-
-  if (loading) return null;
-  if (!session) return <Navigate to="/signin" replace />;
-  return children;
+  return (
+    <>
+      <SignedIn>{children}</SignedIn>
+      <SignedOut>
+        <RedirectToSignIn />
+      </SignedOut>
+    </>
+  );
 }

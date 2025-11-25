@@ -1304,84 +1304,101 @@ export default function AgentSimulator() {
       // Show loading state
       setIsLoadingResults(true);
 
+      // Validate required fields
+      if (!financialProfile.name || financialProfile.name.trim() === '') {
+        toast.error('Please enter your name before starting financial simulation');
+        return null;
+      }
+
+      if (!financialProfile.monthlyIncome || parseFloat(financialProfile.monthlyIncome) <= 0) {
+        toast.error('Please enter a valid monthly income before starting financial simulation');
+        return null;
+      }
+
+      if (!financialProfile.financialGoal || financialProfile.financialGoal.trim() === '') {
+        toast.error('Please enter your financial goal before starting financial simulation');
+        return null;
+      }
+
       // Calculate total expenses
       const total_expenses = financialProfile.expenses.reduce(
         (total, expense) => total + (parseFloat(expense.amount) || 0),
         0
       );
 
-      // Format the data according to the required structure
-      const user_inputs = {
-        user_id: user?.id || "anonymous-user", // Use Supabase user ID or fallback to anonymous user
-        user_name: financialProfile.name || "User", // Simple fallback without "Guest"
-        income: parseFloat(financialProfile.monthlyIncome) || 0,
-        expenses: financialProfile.expenses.map((expense) => ({
-          name: expense.name,
-          amount: parseFloat(expense.amount) || 0,
-        })),
-        total_expenses: total_expenses,
-        goal: financialProfile.financialGoal,
-        financial_type: financialProfile.financialType.toLowerCase(), // Convert to lowercase for API
-        risk_level: financialProfile.riskLevel.toLowerCase(), // Convert to lowercase for API
+      // Format the data according to the Financial Simulator API's expected structure
+      const simulationRequest = {
+        profile: {
+          name: financialProfile.name.trim(),
+          monthly_income: parseFloat(financialProfile.monthlyIncome),
+          expenses: financialProfile.expenses
+            .filter(expense => expense.name && expense.name.trim() !== '' && expense.amount && parseFloat(expense.amount) > 0)
+            .map((expense) => ({
+              name: expense.name.trim(),
+              amount: parseFloat(expense.amount),
+            })),
+          financial_goal: financialProfile.financialGoal.trim(),
+          financial_type: financialProfile.financialType || "Conservative",
+          risk_level: financialProfile.riskLevel || "Low",
+        },
+        simulation_months: 12, // Default to 12 months
+        user_id: user?.id || "anonymous-user",
       };
 
-      console.log("Sending financial simulation data:", user_inputs);
+      console.log("Sending financial simulation request:", simulationRequest);
 
       // Use RTK Query to send the data
-      const data = await startFinancialSimulation(user_inputs).unwrap();
+      const data = await startFinancialSimulation(simulationRequest).unwrap();
 
-      // Check if we got a task ID from the response
-      if (data && data.task_id) {
-        // Store the task ID for polling
-        setSimulationTaskId(data.task_id);
+      // Check if we got a simulation_id from the response
+      if (data && data.simulation_id) {
+        // Store the simulation ID for tracking
+        setSimulationTaskId(data.simulation_id);
 
         // Reset simulation progress
         setSimulationProgress(0);
 
         // Show success message
+        toast.success("Financial simulation completed successfully");
+
+        // Set processing state to false since simulation is complete
+        setIsProcessingSimulation(false);
+
+        // Store the results directly
+        setSimulationResults(data.results);
+
+        // Add a system message about the simulation completion
+        setMessages((prev) => {
+          const successMessage = {
+            id: generateUniqueId(),
+            sender: "system",
+            content: `Financial simulation completed! Generated ${data.recommendations?.length || 0} recommendations based on your profile.`,
+            timestamp: new Date().toISOString(),
+          };
+          return [...prev, successMessage];
+        });
+      } else if (data && data.task_id) {
+        // Handle legacy response format with task_id
+        setSimulationTaskId(data.task_id);
+        setSimulationProgress(0);
         toast.success("Financial simulation started successfully");
-
-        // Set processing state to true to start auto-refresh
         setIsProcessingSimulation(true);
-
-        // Start the auto-refresh interval to poll for results
         startRefreshInterval();
 
-        // Add a system message about the simulation starting
         setMessages((prev) => {
-          // Check if we already have a "simulation started" message
-          const hasStartedMessage = prev.some(
-            (msg) =>
-              msg.sender === "system" &&
-              msg.content ===
-                "Financial simulation is processing. Results will update automatically."
-          );
-
-          if (!hasStartedMessage) {
-            return [
-              ...prev,
-              {
-                id: generateUniqueId(),
-                sender: "system",
-                content:
-                  "Financial simulation is processing. Results will update automatically.",
-                timestamp: new Date().toISOString(),
-              },
-            ];
-          }
-          return prev;
+          const startMessage = {
+            id: generateUniqueId(),
+            sender: "system",
+            content: "Financial simulation is processing. Results will update automatically.",
+            timestamp: new Date().toISOString(),
+          };
+          return [...prev, startMessage];
         });
       } else {
-        // Show success message for backward compatibility
+        // Handle unknown response format
         toast.success("Financial simulation data sent successfully");
-
-        // Set processing state to true to start auto-refresh
         setIsProcessingSimulation(true);
-
-        // After sending data, fetch the simulation results with initial fetch flag
         await fetchSimulationResults(true);
-
-        // Start the auto-refresh interval
         startRefreshInterval();
       }
 
@@ -1389,17 +1406,43 @@ export default function AgentSimulator() {
     } catch (error) {
       console.error("Failed to send financial simulation data:", error);
 
-      // Ensure error has a message property to prevent undefined errors
-      const errorMessage = error?.message || error?.toString() || "Unknown error occurred";
+      // Enhanced error handling
+      let errorMessage = "Unknown error occurred";
+      
+      if (error?.data) {
+        // Handle API validation errors
+        if (error.data.detail) {
+          if (Array.isArray(error.data.detail)) {
+            // Pydantic validation errors
+            const validationErrors = error.data.detail.map(e => {
+              const field = e.loc ? e.loc.join('.') : 'unknown field';
+              return `${field}: ${e.msg || e.message}`;
+            }).join(', ');
+            errorMessage = `Validation error: ${validationErrors}`;
+          } else {
+            errorMessage = error.data.detail;
+          }
+        } else {
+          errorMessage = error.data.message || JSON.stringify(error.data);
+        }
+      } else if (error?.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
 
       // Provide more specific error messages
-      if (errorMessage.includes("Failed to fetch")) {
+      if (errorMessage.includes("Failed to fetch") || errorMessage.includes("Connection")) {
         toast.error(
-          "Could not connect to financial simulation server. Continuing with local simulation."
+          "Could not connect to financial simulation server. Please check if the service is running."
         );
       } else if (errorMessage.includes("timed out")) {
         toast.error(
-          "Connection to financial simulation server timed out. Continuing with local simulation."
+          "Connection to financial simulation server timed out. Please try again."
+        );
+      } else if (errorMessage.includes("validation") || errorMessage.includes("field required") || errorMessage.includes("greater than 0")) {
+        toast.error(
+          `Invalid financial data: ${errorMessage}. Please check your input values.`
         );
       } else {
         toast.error(`Financial simulation error: ${errorMessage}`);

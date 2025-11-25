@@ -1,62 +1,28 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { supabase } from "../supabaseClient";
+// Clerk is the source of truth; Redux mirrors minimal user info.
 
 // Async thunks for authentication
 export const fetchCurrentUser = createAsyncThunk(
   "auth/fetchCurrentUser",
-  async (_, { rejectWithValue }) => {
-    try {
-      const { data, error } = await supabase.auth.getSession();
-
-      if (error) {
-        throw error;
-      }
-
-      if (!data.session) {
-        return null;
-      }
-
-      return data.session.user;
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
+  async () => {
+    // Deprecated with Clerk; App.jsx syncs user via useUser()
+    return null;
   }
 );
 
 export const signIn = createAsyncThunk(
   "auth/signIn",
-  async ({ email, password }, { rejectWithValue }) => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      return data.user;
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
+  async () => {
+    // Handled by Clerk UI/hooks; keep for compatibility
+    return null;
   }
 );
 
 export const signOut = createAsyncThunk(
   "auth/signOut",
-  async (_, { rejectWithValue }) => {
-    try {
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        throw error;
-      }
-
-      return null;
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
+  async () => {
+    // Handled via Clerk; reducer will clear user when App syncs
+    return null;
   }
 );
 

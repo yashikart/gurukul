@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import GlassContainer from "../components/GlassContainer";
 import { supabase } from "../supabaseClient";
+import { useUser } from "@clerk/clerk-react";
 import {
   Clock,
   Target,
@@ -68,6 +69,7 @@ export default function Dashboard() {
   const [isSettingGoal, setIsSettingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState({ hours: 0, minutes: 0 });
   const [user, setUser] = useState(null);
+  const { isSignedIn, user: clerkUser } = useUser();
   const subscriptionRef = useRef(null);
   const coords = useGeolocation();
   const { location, weather } = useLocationWeather(coords);
@@ -158,14 +160,18 @@ export default function Dashboard() {
   useEffect(() => {
     const initializeDashboard = async () => {
       try {
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-        if (sessionError || !session)
-          throw sessionError || new Error("No session");
-        setUser(session.user);
-        const userId = session.user.id;
+        if (!isSignedIn || !clerkUser) throw new Error("Not signed in");
+
+        // Map Clerk user to local shape for UI reuse
+        setUser({
+          id: clerkUser.id,
+          email: clerkUser.primaryEmailAddress?.emailAddress || "",
+          user_metadata: {
+            avatar_url: clerkUser.imageUrl,
+            full_name: clerkUser.fullName || clerkUser.username || "",
+          },
+        });
+        const userId = clerkUser.id;
 
         // Fetch daily goal
         const { data: goalData, error: goalError } = await supabase
@@ -215,18 +221,15 @@ export default function Dashboard() {
         subscriptionRef.current.unsubscribe();
       }
     };
-  }, []);
+  }, [isSignedIn, clerkUser]);
 
   const handleSaveGoal = async () => {
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) throw new Error("No session");
+      if (!isSignedIn || !clerkUser) throw new Error("Not signed in");
 
       const totalSeconds = goalInput.hours * 3600 + goalInput.minutes * 60;
       const { error } = await supabase.from("user_goals").upsert({
-        user_id: session.user.id,
+        user_id: clerkUser.id,
         daily_goal_seconds: totalSeconds,
       });
 

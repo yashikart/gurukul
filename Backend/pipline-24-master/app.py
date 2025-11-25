@@ -168,7 +168,7 @@ class LessonStatusResponse(BaseModel):
     error_message: Optional[str] = None
     lesson_data: Optional[LessonResponse] = None
 
-# Pydantic model for data forwarding to external server
+# Pydantic model for data forwarding to 192.168.0.119
 class DataForwardRequest(BaseModel):
     data: Dict[str, Any]
     endpoint: Optional[str] = "/"
@@ -266,7 +266,7 @@ def format_lesson_for_tts(lesson_data: Dict[str, Any], format_style: str = "comp
 
 async def send_to_tts_service(text: str, user_id: str = "guest-user", description: str = None) -> Dict[str, Any]:
     """
-    Send text to the external TTS service
+    Send text to the external TTS service at 192.168.0.119:8001
 
     Args:
         text: Text to convert to speech
@@ -277,9 +277,8 @@ async def send_to_tts_service(text: str, user_id: str = "guest-user", descriptio
         Dict: Response from TTS service including audio file information
     """
     try:
-        # Get TTS server configuration from environment variables
-        target_server = os.getenv("TTS_SERVER_HOST", "localhost")
-        target_port = int(os.getenv("TTS_SERVER_PORT", "8001"))
+        target_server = "192.168.0.119"
+        target_port = 8001
         tts_url = f"http://{target_server}:{target_port}/api/generate"
 
         logger.info(f"Sending text to TTS service: {tts_url}")
@@ -331,7 +330,7 @@ async def send_to_tts_service(text: str, user_id: str = "guest-user", descriptio
                     },
                     "audio_info": tts_result,
                     "access_info": {
-                        "audio_url": f"http://{os.getenv('MAIN_SERVER_HOST', 'localhost')}:{os.getenv('MAIN_SERVER_PORT', '8000')}/api/audio/{tts_result.get('filename', '')}" if tts_result.get('filename') else None,
+                        "audio_url": f"http://192.168.0.83:8000/api/audio/{tts_result.get('filename', '')}" if tts_result.get('filename') else None,
                         "direct_url": f"http://{target_server}:{target_port}/api/audio/{tts_result.get('filename', '')}" if tts_result.get('filename') else None
                     },
                     "request_info": {
@@ -532,10 +531,10 @@ async def root():
             "llm_status": "/llm_status",
             "generate_lesson_tts": "/lessons/generate-tts - Generate TTS for existing lesson (POST)",
             "generate_text_tts": "/tts/generate - Generate TTS from arbitrary text (POST)",
-            "forward_data": "/forward_data - Send data to external server (POST)",
+            "forward_data": "/forward_data - Send data to external server 192.168.0.119:8001 (POST)",
             "send_lesson_external": "/send_lesson_to_external - Send lesson to external server (POST)",
             "check_external_server": "/check_external_server - Check external server connectivity",
-            "get_audio_file": "/api/audio/{filename} - Get audio file from external TTS server",
+            "get_audio_file": "/api/audio/{filename} - Get audio file from 192.168.0.119:8001",
             "list_audio_files": "/api/audio-files - List available audio files from external server",
             "get_agent_output": "/get_agent_output - Get agent outputs",
             "agent_logs": "/agent_logs - Get agent logs",
@@ -547,7 +546,7 @@ async def root():
         },
         "tts_integration": {
             "automatic_tts": "Lessons now automatically generate TTS audio during creation",
-            "tts_server": "Configurable via environment variables",
+            "tts_server": "192.168.0.119:8001",
             "audio_access": "Audio files accessible via /api/audio/{filename}",
             "supported_formats": ["complete lesson", "section-by-section", "summary"]
         }
@@ -1043,22 +1042,19 @@ class ForwardingMiddleware:
 # Add the forwarding middleware
 app.add_middleware(
     ForwardingMiddleware,
-    target_url=f"http://{os.getenv('FORWARDING_TARGET_HOST', 'localhost')}:{os.getenv('FORWARDING_TARGET_PORT', '8001')}",
+    target_url="http://192.168.0.83:8001",
     timeout=3  # Shorter timeout to avoid blocking
 )
 
 # Server startup moved to end of file
 
-# Add this function to fetch audio files from the remote server
+# Add this function to fetch audio files from the remote server (192.168.0.72:8000)
 @app.get("/tts/tts_outputs/{filename}")
 async def fetch_remote_audio(filename: str):
     """
-    Fetch an audio file from the remote server
+    Fetch an audio file from the remote server (192.168.0.72:8000)
     """
-    # Get remote server configuration from environment variables
-    remote_host = os.getenv("REMOTE_AUDIO_HOST", "localhost")
-    remote_port = int(os.getenv("REMOTE_AUDIO_PORT", "8000"))
-    remote_url = f"http://{remote_host}:{remote_port}/api/audio/{filename}"
+    remote_url = f"http://192.168.0.72:8000/api/audio/{filename}"
 
     try:
         # Make request to the remote server
@@ -1096,12 +1092,9 @@ async def fetch_remote_audio(filename: str):
 @app.get("/remote-audio-files")
 async def list_remote_audio_files():
     """
-    Get a list of available audio files from the remote server
+    Get a list of available audio files from the remote server (192.168.0.72:8000)
     """
-    # Get remote server configuration from environment variables
-    remote_host = os.getenv("REMOTE_AUDIO_HOST", "localhost")
-    remote_port = int(os.getenv("REMOTE_AUDIO_PORT", "8000"))
-    remote_url = f"http://{remote_host}:{remote_port}/api/list-audio-files"
+    remote_url = "http://192.168.0.72:8000/api/list-audio-files"
 
     try:
         response = requests.get(remote_url)
@@ -1113,8 +1106,8 @@ async def list_remote_audio_files():
             # we can try to get a list of recent audio files
             try:
                 # Try to get recent PDF or image summaries which might have audio files
-                pdf_response = requests.get(f"http://{remote_host}:{remote_port}/summarize-pdf")
-                img_response = requests.get(f"http://{remote_host}:{remote_port}/summarize-img")
+                pdf_response = requests.get("http://192.168.0.72:8000/summarize-pdf")
+                img_response = requests.get("http://192.168.0.72:8000/summarize-img")
 
                 audio_files = []
 
@@ -1432,11 +1425,11 @@ async def generate_tts_from_text(request: TTSGenerationRequest):
         )
 
 
-# Data forwarding endpoint to external server
+# Data forwarding endpoint to 192.168.0.119
 @app.post("/forward_data")
 async def forward_data_to_external_server(request: DataForwardRequest):
     """
-    Forward data to external server
+    Forward data to external server at 192.168.0.119
 
     This endpoint allows sending various types of data to the external server.
     It supports different HTTP methods, custom headers, and flexible data formats.
@@ -1479,9 +1472,9 @@ async def forward_data_to_external_server(request: DataForwardRequest):
         }
     """
     try:
-        # Target server configuration - use environment variables
-        target_server = os.getenv("EXTERNAL_SERVER_HOST", "localhost")
-        target_port = int(os.getenv("EXTERNAL_SERVER_PORT", "8001"))  # Default port, can be made configurable
+        # Target server configuration
+        target_server = "192.168.0.119"
+        target_port = 8001  # Default port, can be made configurable
 
         # Build the full URL
         base_url = f"http://{target_server}:{target_port}"
@@ -1492,7 +1485,7 @@ async def forward_data_to_external_server(request: DataForwardRequest):
             "Content-Type": "application/json",
             "User-Agent": "Gurukul-AI-System/1.0",
             "X-Forwarded-By": "Gurukul-API",
-            "X-Source-IP": os.getenv("SOURCE_IP", "pipeline-service"),
+            "X-Source-IP": "192.168.0.83",
             "X-User-ID": request.user_id or "unknown"
         }
 
@@ -1632,7 +1625,7 @@ async def send_lesson_to_external_server(
     include_metadata: bool = True
 ):
     """
-    Convenience endpoint to send a generated lesson to the external server
+    Convenience endpoint to send a generated lesson to the external server at 192.168.0.119
 
     This endpoint retrieves a lesson and sends it to the external server in a standardized format.
 
@@ -1719,11 +1712,11 @@ async def send_lesson_to_external_server(
         )
 
 
-# GET endpoint to retrieve audio files from external TTS server
+# GET endpoint to retrieve audio files from 192.168.0.119:8001
 @app.get("/api/audio/{filename}")
 async def get_audio_from_external_server(filename: str):
     """
-    Retrieve an audio file from the external TTS server
+    Retrieve an audio file from the external server at 192.168.0.119:8001
 
     This endpoint fetches audio files from the external TTS service and streams them
     to the client. It supports various audio formats and provides proper error handling.
@@ -1738,9 +1731,8 @@ async def get_audio_from_external_server(filename: str):
         GET /api/audio/0525b138-b104-477c-8c3b-3280c0abdd23.mp3
     """
     try:
-        # Get external server configuration from environment variables
-        target_server = os.getenv("EXTERNAL_SERVER_HOST", "localhost")
-        target_port = int(os.getenv("EXTERNAL_SERVER_PORT", "8001"))
+        target_server = "192.168.0.119"
+        target_port = 8001
 
         # Build the URL to the external server's audio endpoint
         external_audio_url = f"http://{target_server}:{target_port}/api/audio/{filename}"
@@ -1853,11 +1845,11 @@ async def get_audio_from_external_server(filename: str):
         )
 
 
-# GET endpoint to list available audio files from external TTS server
+# GET endpoint to list available audio files from 192.168.0.119:8001
 @app.get("/api/audio-files")
 async def list_audio_files_from_external_server():
     """
-    Get a list of available audio files from the external TTS server
+    Get a list of available audio files from the external server at 192.168.0.119:8001
 
     This endpoint retrieves the list of audio files available on the external TTS service.
 
@@ -1868,9 +1860,8 @@ async def list_audio_files_from_external_server():
         GET /api/audio-files
     """
     try:
-        # Get external server configuration from environment variables
-        target_server = os.getenv("EXTERNAL_SERVER_HOST", "localhost")
-        target_port = int(os.getenv("EXTERNAL_SERVER_PORT", "8001"))
+        target_server = "192.168.0.119"
+        target_port = 8001
 
         # Build the URL to the external server's list endpoint
         external_list_url = f"http://{target_server}:{target_port}/api/list-audio-files"
@@ -1890,8 +1881,8 @@ async def list_audio_files_from_external_server():
                 "audio_files": audio_list.get("audio_files", []),
                 "count": audio_list.get("count", 0),
                 "access_info": {
-                    "base_url": f"http://{os.getenv('MAIN_SERVER_HOST', 'localhost')}:{os.getenv('MAIN_SERVER_PORT', '8000')}/api/audio/",
-                    "example": f"http://{os.getenv('MAIN_SERVER_HOST', 'localhost')}:{os.getenv('MAIN_SERVER_PORT', '8000')}/api/audio/filename.mp3",
+                    "base_url": f"http://192.168.0.83:8000/api/audio/",
+                    "example": f"http://192.168.0.83:8000/api/audio/filename.mp3",
                     "note": "Use the base_url + filename to access audio files through this API"
                 },
                 "retrieved_at": datetime.now().isoformat()

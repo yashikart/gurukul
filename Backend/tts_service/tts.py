@@ -7,6 +7,7 @@ import uuid
 import os
 import sys
 from pathlib import Path
+from datetime import datetime
 
 # Load environment variables from centralized configuration
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -26,6 +27,8 @@ _allowed = os.getenv("ALLOWED_ORIGINS", "").strip()
 _allowed_list = [o.strip() for o in _allowed.split(",") if o.strip()] or [
     "http://localhost",
     "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5174",
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -61,6 +64,16 @@ async def root():
             "get_audio": "GET /api/audio/{filename} - Retrieve audio file",
             "list_files": "GET /api/list-audio-files - List all audio files"
         }
+    }
+
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint for service monitoring"""
+    return {
+        "status": "healthy",
+        "service": "TTS Service",
+        "timestamp": datetime.now().isoformat(),
+        "version": "1.0.0"
     }
 
 @app.get("/api/audio/{filename}")
