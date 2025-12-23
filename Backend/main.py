@@ -131,8 +131,9 @@ except Exception as e:
     logger.error(f"❌ Failed to mount TTS Service: {e}")
 
 if __name__ == "__main__":
-    # Use port 8000 for main backend (not 8002)
-    port = int(os.getenv("BASE_BACKEND_PORT", 8000))
+    # Render provides PORT environment variable, use it if available
+    # Otherwise fall back to BASE_BACKEND_PORT or default to 8000
+    port = int(os.getenv("PORT") or os.getenv("BASE_BACKEND_PORT", "8000"))
     host = os.getenv("HOST", "0.0.0.0")
     
     logger.info(f"🚀 Starting Gurukul Backend on {host}:{port}")
