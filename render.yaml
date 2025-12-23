@@ -5,14 +5,13 @@ services:
     env: python
     region: oregon
     plan: starter
+    rootDir: Backend
     buildCommand: |
-      cd Backend
       pip install --upgrade pip
-      pip install -r requirements-production.txt
+      pip install -r requirements.txt
       # Download Arabic model checkpoint if configured (non-blocking)
       bash setup_checkpoint.sh || echo "Checkpoint download skipped (not configured or failed)"
     startCommand: |
-      cd Backend
       python main.py
     envVars:
       - key: PORT
@@ -25,45 +24,46 @@ services:
         fromDatabase:
           name: gurukul-mongodb
           property: connectionString
-      - key: REDIS_URL
-        fromDatabase:
-          name: gurukul-redis
-          property: connectionString
       - key: GROQ_API_KEY
         sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: GOOGLE_API_KEY
         sync: false
+      - key: GEMINI_API_KEY
+        sync: false
       - key: ENVIRONMENT
         value: production
       - key: DEBUG
         value: false
       # Arabic Model Checkpoint Configuration (optional)
-      # Option 1: S3 Storage
-      - key: CHECKPOINT_S3_BUCKET
-        sync: false
-      - key: CHECKPOINT_S3_PREFIX
-        value: checkpoint-100000
-      - key: AWS_ACCESS_KEY_ID
-        sync: false
-      - key: AWS_SECRET_ACCESS_KEY
-        sync: false
-      # Option 2: Direct URL
-      - key: CHECKPOINT_DOWNLOAD_URL
-        sync: false
-      # Checkpoint local path
       - key: LOCAL_MODEL_CHECKPOINT_PATH
-        value: /opt/render/checkpoints/checkpoint-100000
+        sync: false
     healthCheckPath: /health
-    
+
+  # Frontend Static Site
+  - type: web
+    name: gurukul-frontend
+    env: static
+    region: oregon
+    plan: starter
+    rootDir: new frontend
+    buildCommand: |
+      npm install
+      npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://gurukul-backend.onrender.com
+      - key: VITE_CHAT_API_BASE_URL
+        value: https://gurukul-backend.onrender.com
+      - key: NODE_VERSION
+        value: 18.0.0
+
 databases:
   # MongoDB Database
   - name: gurukul-mongodb
     databaseName: gurukul
     user: gurukul_user
     plan: starter
-    
-  # Redis Cache
-  - name: gurukul-redis
-    plan: starter
+
