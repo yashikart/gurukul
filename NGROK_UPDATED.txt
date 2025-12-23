@@ -1,0 +1,19 @@
+✅ NGROK URL UPDATED
+
+Old: https://04abd8d9431c.ngrok-free.app
+New: https://272591f54b17.ngrok-free.app
+
+FILES UPDATED:
+✅ Backend/.env
+✅ new frontend/.env.local
+
+SERVICES RESTARTED:
+✅ Chatbot service killed and restarting
+
+NEXT STEPS:
+1. Wait 5 seconds for chatbot to start
+2. Restart frontend: Ctrl+C then npm run dev
+3. Refresh browser (Ctrl+F5)
+4. Test chat - should work now!
+
+All done!

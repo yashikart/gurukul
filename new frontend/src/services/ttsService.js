@@ -5,7 +5,7 @@
 
 import blobUrlManager from '../utils/blobUrlManager';
 
-const TTS_BASE_URL = 'http://localhost:8007';
+const TTS_BASE_URL = import.meta.env.VITE_TTS_API_BASE_URL || 'http://localhost:8007';
 
 class TTSService {
   constructor() {
@@ -355,7 +355,12 @@ class TTSService {
       
       return false;
     } catch (error) {
-      console.warn('⚠️ TTS: Service health check failed:', error.message);
+      // Silently handle blocked requests (ad blockers, etc.)
+      if (error.message && error.message.includes('ERR_BLOCKED_BY_CLIENT')) {
+        console.info('ℹ️ TTS health check blocked by browser extension');
+      } else {
+        console.warn('⚠️ TTS: Service health check failed:', error.message);
+      }
       return false;
     }
   }

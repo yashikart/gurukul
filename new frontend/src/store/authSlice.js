@@ -1,11 +1,11 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-// Clerk is the source of truth; Redux mirrors minimal user info.
+// Supabase is the source of truth; Redux mirrors minimal user info.
 
 // Async thunks for authentication
 export const fetchCurrentUser = createAsyncThunk(
   "auth/fetchCurrentUser",
   async () => {
-    // Deprecated with Clerk; App.jsx syncs user via useUser()
+    // Deprecated with Supabase; App.jsx syncs user via supabase.auth.onAuthStateChange()
     return null;
   }
 );
@@ -13,7 +13,7 @@ export const fetchCurrentUser = createAsyncThunk(
 export const signIn = createAsyncThunk(
   "auth/signIn",
   async () => {
-    // Handled by Clerk UI/hooks; keep for compatibility
+    // Handled by Supabase UI/hooks; keep for compatibility
     return null;
   }
 );
@@ -21,7 +21,7 @@ export const signIn = createAsyncThunk(
 export const signOut = createAsyncThunk(
   "auth/signOut",
   async () => {
-    // Handled via Clerk; reducer will clear user when App syncs
+    // Handled via Supabase; reducer will clear user when App syncs
     return null;
   }
 );

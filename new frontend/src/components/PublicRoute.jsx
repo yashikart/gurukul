@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { useAuth, SignedIn, SignedOut } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext";
 import { toast } from "react-hot-toast";
 import { getLastVisitedPath } from "../utils/routeUtils";
 
@@ -43,7 +43,7 @@ function SimpleLoadingScreen() {
 }
 
 export default function PublicRoute({ children }) {
-  const [authStatus, setAuthStatus] = useState("checking"); // "checking", "authenticated", "unauthenticated"
+  const { user, loading } = useAuth();
   const [hasVisited, setHasVisited] = useState(false);
   const location = useLocation();
 
@@ -51,37 +51,28 @@ export default function PublicRoute({ children }) {
     // Check if user has visited before
     const visited = localStorage.getItem("gurukul_visited") === "true";
     setHasVisited(visited);
-
-    // Set a hard timeout to prevent infinite loading
-    const hardTimeoutId = setTimeout(() => {
-      console.log(
-        "Hard timeout reached in PublicRoute, assuming not authenticated"
-      );
-      setAuthStatus("unauthenticated");
-    }, 5000);
-
-    // With Clerk we can directly determine auth state in render using SignedIn/SignedOut
-    // Here we just clear the timeout immediately
-    clearTimeout(hardTimeoutId);
   }, []);
 
-  // Handle signout path directly is now managed by Clerk's signOut elsewhere if needed
+  // Show loading screen while checking auth status
+  if (loading) {
+    return <SimpleLoadingScreen />;
+  }
 
-  // With Clerk, we can conditionally render based on auth state
+  // If user is authenticated, redirect to dashboard
+  if (user) {
+    return <Navigate to={getLastVisitedPath()} replace />;
+  }
+
+  // If user is not authenticated, show children (public pages)
   return (
     <>
-      <SignedIn>
-        <Navigate to={getLastVisitedPath()} replace />
-      </SignedIn>
-      <SignedOut>
-        {/* Mark as visited when showing the GetStarted page */}
-        {(() => {
-          if (!hasVisited) {
-            localStorage.setItem("gurukul_visited", "true");
-          }
-          return children;
-        })()}
-      </SignedOut>
+      {/* Mark as visited when showing the GetStarted page */}
+      {(() => {
+        if (!hasVisited) {
+          localStorage.setItem("gurukul_visited", "true");
+        }
+        return children;
+      })()}
     </>
   );
 }

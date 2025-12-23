@@ -1,0 +1,178 @@
+{
+  "schemas": {
+    "user": {
+      "user_id": "string",
+      "username": "string",
+      "role": "string",
+      "balances": {
+        "PunyaTokens": "number",
+        "SevaPoints": "number",
+        "PaapTokens": {
+          "minor": "number",
+          "medium": "number",
+          "maha": "number"
+        }
+      },
+      "merit_score": "number",
+      "cheat_history": "array",
+      "rebirth_count": "number",
+      "created_at": "datetime",
+      "updated_at": "datetime"
+    },
+    "karma_action": {
+      "user_id": "string",
+      "action": "string",
+      "current_role": "string",
+      "predicted_next_role": "string",
+      "merit_score": "number",
+      "reward_token": "string",
+      "reward_tier": "string",
+      "reward_value": "number",
+      "penalty_token": "string",
+      "penalty_value": "number",
+      "penalty_level": "number",
+      "penalty_name": "string",
+      "paap_generated": "boolean",
+      "paap_severity": "string",
+      "paap_value": "number",
+      "appeal_created": "boolean",
+      "action_flow": "string",
+      "note": "string",
+      "timestamp": "datetime"
+    },
+    "appeal": {
+      "status": "string",
+      "message": "string",
+      "plan": {
+        "plan_id": "string",
+        "user_id": "string",
+        "action": "string",
+        "severity": "string",
+        "tasks": "array",
+        "status": "string",
+        "created_at": "datetime"
+      }
+    },
+    "atonement": {
+      "status": "string",
+      "message": "string",
+      "plan": {
+        "plan_id": "string",
+        "user_id": "string",
+        "action": "string",
+        "severity": "string",
+        "tasks": "array",
+        "status": "string",
+        "created_at": "datetime",
+        "completed_at": "datetime"
+      }
+    },
+    "death_event": {
+      "status": "string",
+      "user_id": "string",
+      "loka": "string",
+      "description": "string",
+      "carryover": {
+        "net_karma": "number",
+        "merit_carryover": "number",
+        "role_carryover": "string"
+      },
+      "paap_tokens_status": {
+        "minor": "number",
+        "medium": "number",
+        "maha": "number",
+        "total": "number",
+        "status": "string"
+      },
+      "final_balances": "object",
+      "merit_score": "number",
+      "role": "string",
+      "rebirth_count": "number",
+      "timestamp": "datetime"
+    },
+    "unified_event": {
+      "event_id": "string",
+      "event_type": "string",
+      "data": "object",
+      "timestamp": "datetime",
+      "source": "string",
+      "status": "string",
+      "response_data": "object",
+      "error_message": "string",
+      "created_at": "datetime",
+      "updated_at": "datetime"
+    },
+    "karma_event": {
+      "event_id": "string",
+      "event_type": "string (life_event, atonement, appeal, death_event, stats_request, atonement_with_file)",
+      "data": {
+        "user_id": "string",
+        "action": "string",
+        "role": "string",
+        "plan_id": "string",
+        "atonement_type": "string",
+        "amount": "number",
+        "proof_text": "string",
+        "tx_hash": "string",
+        "has_file": "boolean",
+        "file_name": "string"
+      },
+      "timestamp": "datetime",
+      "source": "string",
+      "status": "string (processed, failed, pending)",
+      "response_data": "object",
+      "error_message": "string",
+      "created_at": "datetime",
+      "updated_at": "datetime"
+    }
+  },
+  "collections": {
+    "users": "user documents",
+    "transactions": "karma action logs",
+    "atonements": "atonement plans and submissions",
+    "death_events": "death events and loka assignments",
+    "karma_events": "unified event gateway logs - complete audit trail of all system events"
+  },
+  "api_endpoints": {
+    "log_action": {
+      "method": "POST",
+      "path": "/v1/karma/log-action",
+      "description": "Log a user action and update karma/merit scores"
+    },
+    "appeal": {
+      "method": "POST", 
+      "path": "/v1/karma/appeal",
+      "description": "Submit an appeal for Paap actions and receive atonement plan"
+    },
+    "atonement_submit": {
+      "method": "POST",
+      "path": "/v1/karma/atonement/submit",
+      "description": "Submit proof for atonement task completion"
+    },
+    "death_event": {
+      "method": "POST",
+      "path": "/v1/karma/death/event",
+      "description": "Compute loka assignment and record death event"
+    },
+    "user_stats": {
+      "method": "GET",
+      "path": "/v1/karma/stats/user/{user_id}",
+      "description": "Get comprehensive user karma statistics"
+    },
+    "system_stats": {
+      "method": "GET",
+      "path": "/v1/karma/stats/system",
+      "description": "Get system-wide karma statistics"
+    },
+    "unified_event": {
+      "method": "POST",
+      "path": "/v1/karma/event/",
+      "description": "Unified event gateway for all karma events (life_event, atonement, appeal, death_event, stats_request)"
+    },
+    "unified_event_with_file": {
+      "method": "POST",
+      "path": "/v1/karma/event/with-file",
+      "description": "File-based event submission (currently supports atonement_with_file)"
+    }
+  }
+}

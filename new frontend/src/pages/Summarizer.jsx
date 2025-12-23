@@ -4,7 +4,7 @@ import { FiUpload, FiFileText, FiX } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import { useTranslation } from "react-i18next";
-import { useUser } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext";
 import chatLogsService from "../services/chatLogsService";
 import { CHAT_API_BASE_URL } from "../config";
 import { useTTS } from "../hooks/useTTS";
@@ -18,9 +18,10 @@ import {
   useLazyGetUniGuruPdfSummaryQuery,
   useLazyGetUniGuruImageSummaryQuery,
 } from "../api/summaryApiSlice";
+import { processSummarizerUsage, dispatchKarmaChange } from "../utils/karmaManager";
 
 export default function Summarizer() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -28,9 +29,10 @@ export default function Summarizer() {
   const [streamingContent, setStreamingContent] = useState("");
   const [showStreamingView, setShowStreamingView] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
-  const [selectedModel, setSelectedModel] = useState("uniguru"); // Fixed to UniGuru model
+  const [selectedModel, setSelectedModel] = useState("grok"); // Using Grok model (default)
   const [userId, setUserId] = useState(null);
-  const { isSignedIn, user } = useUser();
+  const { user } = useAuth();
+  const isSignedIn = !!user;
   const fileInputRef = useRef(null);
   const streamingControllerRef = useRef(null);
   const navigate = useNavigate();
@@ -112,15 +114,31 @@ export default function Summarizer() {
 
   const getSummary = async (isImage) => {
     try {
+      console.log(`📥 Fetching ${isImage ? 'image' : 'PDF'} summary...`);
+
+      // Determine language for fetching summaries
+      const currentLanguage = i18n.language && i18n.language.toLowerCase().startsWith("ar") ? "arabic" : "english";
+      
+      let response;
       if (isImage) {
-        const response = await getImageSummary().unwrap();
-        return response;
+        response = await getImageSummary(currentLanguage).unwrap();
       } else {
-        const response = await getPdfSummary().unwrap();
-        return response;
+        response = await getPdfSummary(currentLanguage).unwrap();
       }
+      
+      console.log("✅ Summary response received:", response);
+      
+      // Validate response
+      if (!response || (!response.answer && !response.summary && !response.content)) {
+        console.warn("⚠️ Response missing content fields:", response);
+        throw new Error("Summary response is empty or invalid");
+      }
+      
+      return response;
     } catch (error) {
-      throw new Error("Failed to fetch summary");
+      console.error("❌ Failed to fetch summary:", error);
+      const errorMessage = error.data?.error || error.message || "Failed to fetch summary";
+      throw new Error(errorMessage);
     }
   };
 
@@ -155,16 +173,23 @@ export default function Summarizer() {
         }
       );
 
-      // Upload file using RTK Query with UniGuru model
+      // Get current language (map i18n language to backend format)
+      // Handle Arabic language codes: "ar", "ar-SA", "ar-EG", etc.
+      const currentLanguage = i18n.language && i18n.language.toLowerCase().startsWith("ar") ? "arabic" : "english";
+      console.log("🌐 Language detection:", { i18nLanguage: i18n.language, currentLanguage });
+
+      // Upload file using RTK Query with Grok model
       if (isImage) {
         await uploadImageForSummary({
           file,
-          llm: "uniguru",
+          llm: "grok",
+          language: currentLanguage,
         }).unwrap();
       } else {
         await uploadPdfForSummary({
           file,
-          llm: "uniguru",
+          llm: "grok",
+          language: currentLanguage,
         }).unwrap();
       }
 
@@ -199,6 +224,17 @@ export default function Summarizer() {
         position: "bottom-right",
         duration: 3000,
       });
+
+      // Process karma for using summarizer
+      const effectiveUserId = userId || "guest-user";
+      const karmaResult = processSummarizerUsage(effectiveUserId);
+      if (karmaResult) {
+        dispatchKarmaChange(karmaResult);
+        toast.success(`+${karmaResult.change} Karma: ${karmaResult.reason}`, {
+          position: "top-right",
+          duration: 3000,
+        });
+      }
 
       // Log document summary to Supabase
       try {
@@ -242,23 +278,259 @@ export default function Summarizer() {
 
       const isImage = file.type.startsWith("image/");
 
-      // Upload file first
-      toast.loading("Uploading file to UniGuru...", {
+      // Validate file before upload
+      if (file.size > 10 * 1024 * 1024) {
+        throw new Error("File size exceeds 10MB limit. Please upload a smaller file.");
+      }
+
+      // Check backend connectivity first
+      console.log("🔍 Checking backend connectivity:", CHAT_API_BASE_URL);
+      try {
+        const healthCheck = await fetch(`${CHAT_API_BASE_URL}/health`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(5000) // 5 second timeout
+        }).catch(() => null);
+        
+        if (!healthCheck || !healthCheck.ok) {
+          console.warn("⚠️ Backend health check failed, but continuing...");
+        } else {
+          console.log("✅ Backend is reachable");
+        }
+      } catch (healthError) {
+        console.warn("⚠️ Could not verify backend health:", healthError);
+        // Continue anyway - the upload will fail with a better error if backend is down
+      }
+
+      // Upload file first with Grok model
+      toast.loading("Uploading file to Grok...", {
         id: "upload-progress",
         position: "bottom-right",
       });
 
-      if (isImage) {
-        await uploadImageForSummary({ file }).unwrap();
-      } else {
-        await uploadPdfForSummary({ file }).unwrap();
+      console.log("📤 Uploading file for analysis:", {
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        fileSizeMB: (file.size / (1024 * 1024)).toFixed(2),
+        isImage: isImage,
+        llm: "grok",
+        backendUrl: CHAT_API_BASE_URL
+      });
+
+      try {
+        // Get current language (map i18n language to backend format)
+        // Handle Arabic language codes: "ar", "ar-SA", "ar-EG", etc.
+        const currentLanguage = i18n.language && i18n.language.toLowerCase().startsWith("ar") ? "arabic" : "english";
+        console.log("🌐 Language detection (streaming):", { i18nLanguage: i18n.language, currentLanguage });
+        
+        // Use direct fetch to ensure query parameter is sent correctly
+        // FastAPI endpoint: process_pdf(file: UploadFile = File(...), llm: str = "grok", language: str = "english")
+        // Since llm and language are not Form(), FastAPI reads them from query string
+        
+        const uploadEndpoint = isImage ? "/process-img" : "/process-pdf";
+        const uploadUrl = `${CHAT_API_BASE_URL}${uploadEndpoint}?llm=grok&language=${encodeURIComponent(currentLanguage)}`;
+        
+        console.log("📤 Direct upload attempt:", {
+          endpoint: uploadUrl,
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          language: currentLanguage
+        });
+        
+        const formData = new FormData();
+        formData.append("file", file);
+        // Also append llm and language as FormData - FastAPI might read them from FormData even if not marked as Form()
+        formData.append("llm", "grok");
+        formData.append("language", currentLanguage);
+        
+        let uploadResponse;
+        let usedLLM = "grok";
+        
+        try {
+          // Try direct fetch with grok - using both query parameter AND FormData
+          // FastAPI endpoint: process_pdf(file: UploadFile = File(...), llm: str = "grok")
+          // Since llm is not marked with Query() or Form(), FastAPI tries query params first,
+          // but with File uploads, it might read from FormData too
+          uploadResponse = await fetch(uploadUrl, {
+            method: "POST",
+            body: formData,
+            // Don't set Content-Type - browser will set it with boundary for FormData
+            credentials: 'include', // Include cookies if needed
+          });
+          
+          console.log("📥 Upload response:", {
+            status: uploadResponse.status,
+            statusText: uploadResponse.statusText,
+            ok: uploadResponse.ok,
+            headers: Object.fromEntries(uploadResponse.headers.entries())
+          });
+          
+          if (!uploadResponse.ok) {
+            let errorText;
+            try {
+              const errorJson = await uploadResponse.json();
+              errorText = errorJson.detail || errorJson.error || JSON.stringify(errorJson);
+            } catch {
+              errorText = await uploadResponse.text().catch(() => `HTTP ${uploadResponse.status}: ${uploadResponse.statusText}`);
+            }
+            
+            console.error("❌ Upload failed:", {
+              status: uploadResponse.status,
+              errorText: errorText.substring(0, 500)
+            });
+            
+            // Backend now handles automatic fallback (grok -> llama -> chatgpt)
+            // If we get here, the backend tried all models and failed
+            if (errorText.includes("GROQ_API_KEY") || errorText.includes("API key") || errorText.includes("not set")) {
+              throw new Error(`API Key Missing: Please set GROQ_API_KEY environment variable in your backend.`);
+            } else if (errorText.includes("Rate limit") || errorText.includes("429")) {
+              throw new Error(`Rate limit exceeded. Please wait a moment and try again.`);
+            } else if (errorText.includes("Invalid GROQ_API_KEY") || errorText.includes("401")) {
+              throw new Error(`Invalid API Key: Please check your GROQ_API_KEY is correct.`);
+            } else if (errorText.includes("All LLM models failed")) {
+              throw new Error(`All AI models failed. Please check:\n1. GROQ_API_KEY is set correctly\n2. API key has sufficient credits\n3. Network connection is stable`);
+            } else {
+              // Generic error - backend should have tried fallback automatically
+              throw new Error(`Upload failed: ${errorText}`);
+            }
+          }
+          
+          // Parse response if it's JSON
+          const contentType = uploadResponse.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const uploadResult = await uploadResponse.json();
+            console.log("✅ File uploaded successfully:", uploadResult);
+          } else {
+            console.log("✅ File uploaded successfully (status:", uploadResponse.status + ")");
+          }
+          
+          // Upload successful, continue with streaming
+          
+        } catch (directFetchError) {
+          console.error("❌ Direct fetch upload failed:", directFetchError);
+          
+          // Get current language (map i18n language to backend format)
+          // Handle Arabic language codes: "ar", "ar-SA", "ar-EG", etc.
+          const currentLanguage = i18n.language && i18n.language.toLowerCase().startsWith("ar") ? "arabic" : "english";
+          console.log("🌐 Language detection (fallback):", { i18nLanguage: i18n.language, currentLanguage });
+          
+          // Fallback to RTK Query with llama
+          usedLLM = "llama";
+          console.log("🔄 Falling back to RTK Query with Llama model...");
+          
+          if (isImage) {
+            uploadResult = await uploadImageForSummary({ file, llm: "llama", language: currentLanguage }).unwrap();
+          } else {
+            uploadResult = await uploadPdfForSummary({ file, llm: "llama", language: currentLanguage }).unwrap();
+          }
+          
+          console.log("✅ RTK Query upload successful with Llama:", uploadResult);
+          
+          toast("⚠️ Using Llama model (fallback)", {
+            icon: "ℹ️",
+            position: "bottom-right",
+            duration: 3000,
+          });
+        }
+      } catch (uploadError) {
+        console.error("❌ File upload failed:", uploadError);
+        console.error("❌ Upload error details:", {
+          status: uploadError?.status,
+          data: uploadError?.data,
+          error: uploadError?.error,
+          message: uploadError?.message,
+          originalStatus: uploadError?.originalStatus,
+          originalStatusText: uploadError?.originalStatusText
+        });
+        
+        // Extract error message from RTK Query error structure
+        let errorMessage = "Unknown error";
+        let errorDetails = {};
+        
+        if (uploadError?.data) {
+          // Backend returned error response
+          errorDetails.backendResponse = uploadError.data;
+          
+          if (typeof uploadError.data === 'string') {
+            errorMessage = uploadError.data;
+          } else if (uploadError.data?.detail) {
+            errorMessage = uploadError.data.detail;
+          } else if (uploadError.data?.error) {
+            errorMessage = uploadError.data.error;
+          } else if (uploadError.data?.message) {
+            errorMessage = uploadError.data.message;
+          } else {
+            errorMessage = JSON.stringify(uploadError.data);
+          }
+        } else if (uploadError?.error) {
+          errorMessage = uploadError.error;
+        } else if (uploadError?.message) {
+          errorMessage = uploadError.message;
+        }
+        
+        // Check for specific RTK Query error types
+        if (uploadError?.status) {
+          errorDetails.status = uploadError.status;
+          
+          if (uploadError.status === 'FETCH_ERROR') {
+            errorMessage = `Network error: Could not connect to backend server at ${CHAT_API_BASE_URL}. Please ensure:
+1. The backend is running on port 8001
+2. CORS is properly configured
+3. The server is accessible`;
+          } else if (uploadError.status === 'PARSING_ERROR') {
+            errorMessage = `Server response parsing error: ${errorMessage}. The server may have returned invalid data.`;
+          } else if (uploadError.status === 'TIMEOUT_ERROR') {
+            errorMessage = `Upload timeout after 120 seconds. The file (${(file.size / (1024 * 1024)).toFixed(2)} MB) may be too large or the server is taking too long to respond.`;
+          } else if (typeof uploadError.status === 'number') {
+            const statusCode = uploadError.status;
+            if (statusCode === 400) {
+              errorMessage = `Bad Request (400): ${errorMessage || 'Invalid file format or parameters'}`;
+            } else if (statusCode === 413) {
+              errorMessage = `File too large (413): The file exceeds the server's size limit`;
+            } else if (statusCode === 415) {
+              errorMessage = `Unsupported Media Type (415): The file type is not supported`;
+            } else if (statusCode === 500) {
+              errorMessage = `Server Error (500): ${errorMessage || 'Internal server error occurred'}`;
+            } else if (statusCode === 503) {
+              errorMessage = `Service Unavailable (503): The backend service is temporarily unavailable`;
+            } else {
+              errorMessage = `HTTP error ${statusCode}: ${uploadError.originalStatusText || errorMessage || 'Server error'}`;
+            }
+          }
+        }
+        
+        console.error("❌ Full error details:", {
+          error: uploadError,
+          errorMessage,
+          errorDetails,
+          fileInfo: {
+            name: file.name,
+            size: file.size,
+            type: file.type
+          }
+        });
+        
+        throw new Error(`Failed to upload file: ${errorMessage}`);
       }
 
       toast.dismiss("upload-progress");
 
+      // Show analyzing toast
+      toast.loading("Analyzing document with UniGuru AI...", {
+        id: "analyzing-progress",
+        position: "bottom-right",
+      });
+
       // Start streaming analysis using local backend
       const streamEndpoint = isImage ? "/process-img-stream" : "/process-pdf-stream";
-      const streamUrl = `${CHAT_API_BASE_URL}${streamEndpoint}?llm=uniguru`;
+      const currentLanguage =
+        i18n.language && i18n.language.toLowerCase().startsWith("ar")
+          ? "arabic"
+          : "english";
+      const streamUrl = `${CHAT_API_BASE_URL}${streamEndpoint}?llm=grok&language=${encodeURIComponent(
+        currentLanguage
+      )}`;
 
       console.log(`🌊 Starting streaming ${isImage ? 'image' : 'document'} analysis:`, streamUrl);
 
@@ -266,15 +538,29 @@ export default function Summarizer() {
       const controller = new AbortController();
       streamingControllerRef.current = controller;
 
-      const response = await fetch(streamUrl, { signal: controller.signal });
+      const response = await fetch(streamUrl, { 
+        signal: controller.signal,
+        headers: {
+          'Accept': 'text/event-stream',
+        }
+      });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text().catch(() => 'Unknown error');
+        console.error("❌ Streaming response error:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorText: errorText.substring(0, 500)
+        });
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText.substring(0, 200)}`);
       }
+
+      console.log("✅ Streaming connection established");
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let accumulatedContent = "";
+      let hasReceivedContent = false;
 
       // Process the stream
       while (true) {
@@ -282,6 +568,9 @@ export default function Summarizer() {
 
         if (done) {
           console.log("🏁 Streaming complete");
+          if (!hasReceivedContent && accumulatedContent.trim() === "") {
+            throw new Error("No content received from streaming endpoint. The document may not have been processed correctly.");
+          }
           break;
         }
 
@@ -294,22 +583,63 @@ export default function Summarizer() {
               console.log("✅ Stream ended successfully");
               break;
             } else if (line.includes('[ERROR]')) {
-              throw new Error("Streaming error occurred");
+              const errorMsg = line.replace('[ERROR]', '').trim() || "Streaming error occurred";
+              throw new Error(errorMsg);
             } else if (line.startsWith('data: ')) {
-              const content = line.substring(6);
+              const content = line.substring(6).trim();
 
-              // Filter out status messages and only accumulate actual content
-              const isStatusMessage = content.includes('🔍') || content.includes('📄') ||
-                                    content.includes('🤖') || content.includes('📝') ||
-                                    content.includes('✅') || content.includes('🎵') ||
-                                    content.includes('[END]') || content.includes('[ERROR]') ||
-                                    content.includes('Starting document') || content.includes('Processing:') ||
-                                    content.includes('Using UNIGURU') || content.includes('Generating comprehensive') ||
-                                    content.includes('Document analysis complete') || content.includes('Audio summary available');
+              // Filter out only obvious status messages, but be more lenient with content
+              const isObviousStatusMessage = 
+                (content.includes('🔍 Starting') && content.length < 50) || 
+                (content.includes('📄 Processing') && content.length < 50) ||
+                (content.includes('🤖 Using') && content.length < 50) ||
+                (content.includes('📝 Generating') && content.length < 50) ||
+                (content === '✅' || content === '✅ Image analysis complete!' || content === '✅ Document analysis complete!') ||
+                (content.includes('🎵 Audio') && content.length < 50) ||
+                content === '[END]' || 
+                content === '[ERROR]' ||
+                (content.includes('Starting document') && content.length < 50) || 
+                (content.includes('Processing:') && content.length < 50) ||
+                (content.includes('Using GROK') && content.length < 50) ||
+                (content.includes('Using UNIGURU') && content.length < 50) ||
+                (content === 'Document analysis complete!') ||
+                (content === 'Audio summary available for download') ||
+                (content === 'Image analysis complete!');
 
-              // Add actual content, not status messages
-              if (!isStatusMessage && content.trim()) {
-                accumulatedContent += content + '\n';
+              // Add content if it's not an obvious status message
+              // Be more lenient - include content that might be part of the analysis
+              if (!isObviousStatusMessage && content.trim()) {
+                // Check for Arabic characters
+                const hasArabic = /[\u0600-\u06FF]/.test(content);
+                // Check if it looks like actual analysis content
+                const looksLikeContent = 
+                  content.length > 20 || // Longer content is likely analysis
+                  content.includes('.') || // Contains sentences
+                  content.includes('The') || // Starts with common words
+                  content.includes('This') ||
+                  content.includes('It') ||
+                  content.match(/^[A-Z]/); // Starts with capital letter (likely a sentence)
+
+                // If Arabic UI selected, suppress short non-Arabic lines (often status/intro)
+                const suppressNonArabic =
+                  currentLanguage === "arabic" &&
+                  !hasArabic &&
+                  content.length < 150;
+
+                if (!suppressNonArabic && (looksLikeContent || content.length > 15 || hasArabic)) {
+                  accumulatedContent += content + '\n';
+                  hasReceivedContent = true;
+                  setStreamingContent(accumulatedContent);
+                }
+              }
+            } else if (line.trim() && !line.startsWith('data: ')) {
+              // Handle lines that don't start with 'data: ' but might contain content
+              const trimmedLine = line.trim();
+              if (trimmedLine.length > 10 && 
+                  !trimmedLine.includes('[END]') && 
+                  !trimmedLine.includes('[ERROR]')) {
+                accumulatedContent += trimmedLine + '\n';
+                hasReceivedContent = true;
                 setStreamingContent(accumulatedContent);
               }
             }
@@ -317,11 +647,18 @@ export default function Summarizer() {
         }
       }
 
+      // Dismiss analyzing toast
+      toast.dismiss("analyzing-progress");
+
+      if (!hasReceivedContent || accumulatedContent.trim() === "") {
+        throw new Error("No analysis content was generated. Please try uploading the file again.");
+      }
+
       // Save the final content to localStorage for potential navigation
       const finalSummaryData = {
         answer: accumulatedContent,
         title: isImage ? "Image Analysis" : "Document Summary",
-        llm: "uniguru",
+        llm: "grok",
         audio_file: null, // Will be handled separately
       };
 
@@ -336,6 +673,17 @@ export default function Summarizer() {
         position: "bottom-right",
         duration: 3000,
       });
+
+      // Process karma for using summarizer
+      const effectiveUserId = userId || "guest-user";
+      const karmaResult = processSummarizerUsage(effectiveUserId);
+      if (karmaResult) {
+        dispatchKarmaChange(karmaResult);
+        toast.success(`+${karmaResult.change} Karma: ${karmaResult.reason}`, {
+          position: "top-right",
+          duration: 3000,
+        });
+      }
 
       // Trigger TTS auto-play for the generated content
       if (ttsServiceHealthy && accumulatedContent.trim()) {
@@ -363,6 +711,10 @@ export default function Summarizer() {
       }
 
     } catch (err) {
+      // Dismiss any loading toasts
+      toast.dismiss("upload-progress");
+      toast.dismiss("analyzing-progress");
+      
       if (err.name === "AbortError") {
         // Stream was canceled by user
         toast("Analysis canceled", {
@@ -370,11 +722,16 @@ export default function Summarizer() {
           position: "bottom-right",
         });
       } else {
-        const errorMsg = err.message || "Failed to stream document analysis";
+        const errorMsg = err.message || err.data?.error || "Failed to stream document analysis";
+        console.error("❌ Streaming analysis error:", {
+          error: err,
+          message: errorMsg,
+          stack: err.stack
+        });
         setError(errorMsg);
-        toast.error(errorMsg, {
+        toast.error(`Analysis failed: ${errorMsg}`, {
           position: "bottom-right",
-          duration: 5000,
+          duration: 8000,
         });
       }
     } finally {
@@ -395,20 +752,20 @@ export default function Summarizer() {
               fontFamily: "Nunito, sans-serif",
             }}
           >
-            Smart Document Analysis
+            {t("Smart Document Analysis")}
           </h2>
           <p className="text-white/80 text-xl mb-3">
-            Upload your documents for instant AI-powered summaries
+            {t("Upload your documents for instant AI-powered summaries")}
           </p>
           <p className="text-white/60 text-sm">
-            Supported formats: PDF, DOC, DOCX, JPG, PNG • Max size: 10MB
+            {t("Supported formats: PDF, DOC, DOCX, JPG, PNG • Max size: 10MB")}
           </p>
 
-          {/* AI Model Display - Fixed to UniGuru */}
+          {/* AI Model Display - Using Grok */}
           <div className="mt-4 flex items-center justify-center">
             <div className="relative group">
               <div className="absolute -top-8 left-0 bg-black/80 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-                {t("Powered by UniGuru AI Model")}
+                {t("Powered by Grok AI Model")}
               </div>
               <label className="text-white/80 mr-3">{t("AI Model")}:</label>
               <div
@@ -421,7 +778,7 @@ export default function Summarizer() {
                   textAlign: "center",
                 }}
               >
-                UniGuru
+                Grok
               </div>
             </div>
           </div>
@@ -430,6 +787,29 @@ export default function Summarizer() {
         {/* Main Content Area */}
         {showStreamingView ? (
           <div className="mt-6">
+            <style>{`
+              .summary-content::-webkit-scrollbar {
+                width: 10px;
+              }
+              .summary-content::-webkit-scrollbar-track {
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                margin: 4px 0;
+              }
+              .summary-content::-webkit-scrollbar-thumb {
+                background: rgba(255, 153, 51, 0.6);
+                border-radius: 10px;
+                border: 2px solid rgba(0, 0, 0, 0.2);
+              }
+              .summary-content::-webkit-scrollbar-thumb:hover {
+                background: rgba(255, 153, 51, 0.8);
+              }
+              /* Firefox scrollbar */
+              .summary-content {
+                scrollbar-width: thin;
+                scrollbar-color: rgba(255, 153, 51, 0.6) rgba(255, 255, 255, 0.1);
+              }
+            `}</style>
             <div className="relative rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl ring-1 ring-white/5 p-4 md:p-6 overflow-hidden">
               {/* Close (X) button to go back */}
               <button
@@ -442,7 +822,7 @@ export default function Summarizer() {
                   setStreamingContent("");
                 }}
                 className="absolute top-3 right-3 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-all duration-200 border border-white/20 backdrop-blur-sm"
-                title="Close analysis"
+                title={t("Close analysis")}
               >
                 <FiX className="w-4 h-4 text-white" />
               </button>
@@ -451,7 +831,7 @@ export default function Summarizer() {
                 {/* Preview Panel */}
                 <div className="bg-black/20 p-3 md:p-4 rounded-xl border border-white/10 flex flex-col h-full">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-white font-semibold flex items-center gap-2"><FiFileText className="w-4 h-4 text-white/80" /> Preview</h3>
+                    <h3 className="text-white font-semibold flex items-center gap-2"><FiFileText className="w-4 h-4 text-white/80" /> {t("Preview")}</h3>
                     {file && (
                       <span className="text-white/60 text-xs truncate max-w-[200px]">{file.name}</span>
                     )}
@@ -459,53 +839,53 @@ export default function Summarizer() {
                   <div className="mt-2 rounded-xl overflow-hidden border border-white/5 bg-black/30 flex-1">
                     {file?.type?.includes("pdf") && previewUrl ? (
                       <object data={previewUrl} type="application/pdf" className="w-full h-full">
-                        <div className="p-4 text-white/70 text-sm">PDF preview not supported. You can download and open the file locally.</div>
+                        <div className="p-4 text-white/70 text-sm">{t("PDF preview not supported. You can download and open the file locally.")}</div>
                       </object>
                     ) : file?.type?.startsWith("image/") && previewUrl ? (
                       <img src={previewUrl} alt={file?.name || 'preview'} className="w-full h-full object-contain bg-black/30" />
                     ) : file ? (
                       <div className="p-6 text-white/70 text-sm">
-                        No inline preview available for this file type.
+                        {t("No inline preview available for this file type.")}
                         <div className="mt-2 text-white/50">{file.name}</div>
                       </div>
                     ) : (
-                      <div className="p-6 text-white/60">No file selected</div>
+                      <div className="p-6 text-white/60">{t("No file selected")}</div>
                     )}
                   </div>
                 </div>
 
                 {/* Live Analysis Panel */}
-                <div className="bg-black/20 p-3 md:p-4 rounded-xl border border-white/10 flex flex-col h-full">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-white font-semibold">Live Document Analysis</h3>
+                <div className="bg-black/20 p-3 md:p-4 rounded-xl border border-white/10 flex flex-col h-full overflow-hidden">
+                  <div className="flex items-center justify-between mb-3 flex-shrink-0">
+                    <h3 className="text-white font-semibold">{t("Live Document Analysis")}</h3>
                     <div className="flex items-center gap-2">
-                      <span className="bg-[#FF9933]/20 px-2 py-0.5 rounded text-xs font-bold text-white/90">UniGuru</span>
+                      <span className="bg-[#FF9933]/20 px-2 py-0.5 rounded text-xs font-bold text-white/90">Grok</span>
                       {isStreaming && (
                         <div className="flex items-center gap-1">
                           <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                          <span className="text-green-400 text-xs">Analyzing...</span>
+                          <span className="text-green-400 text-xs">{t("Analyzing...")}</span>
                         </div>
                       )}
                       {!isStreaming && streamingContent && ttsServiceHealthy && (
                         <div className="flex items-center gap-1">
                           <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-                          <span className="text-blue-400 text-xs">🔊 Audio Ready</span>
+                          <span className="text-blue-400 text-xs">🔊 {t("Audio Ready")}</span>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  <div className="bg-black/20 p-4 rounded-xl border border-white/5 flex-1 overflow-auto">
+                  <div className="bg-black/20 p-4 rounded-xl border border-white/5 flex-1 overflow-y-scroll overflow-x-hidden summary-content" style={{ minHeight: 0, maxHeight: '100%' }}>
                     {streamingContent ? (
-                      <div className="text-white/90 whitespace-pre-wrap leading-relaxed">
-                        {streamingContent.split('\n').map((line, index) => (
-                          <div key={index} className="mb-2">
-                            {line.trim() && (
-                              <div className="flex items-start">
-                                <span className="text-[#FF9933] mr-2 mt-1.5">•</span>
-                                <span>{line}</span>
-                              </div>
-                            )}
+                      <div className="text-white/90 leading-relaxed">
+                        {streamingContent.split('\n\n').filter(p => p.trim()).map((paragraph, index) => (
+                          <div
+                            key={index}
+                            className="mb-6 last:mb-0 group"
+                          >
+                            <p className="summary-paragraph text-white/95 leading-relaxed text-base md:text-lg font-normal text-justify bg-gradient-to-r from-white/5 via-white/3 to-transparent rounded-lg p-4 md:p-5 hover:bg-white/10 hover:shadow-lg hover:shadow-[#FF9933]/10 transition-all duration-300 border-l-2 border-[#FF9933]/30 hover:border-[#FF9933]/60 backdrop-blur-sm">
+                              {paragraph.trim().split('\n').join(' ')}
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -555,9 +935,9 @@ export default function Summarizer() {
                   <FiFileText className="text-white/70 w-20 h-20 mb-6 group-hover:text-[#FF9933] transition-colors duration-300" />
                   <div className="text-center relative z-10">
                     <p className="text-white text-lg font-medium mb-2">
-                      Drop your file here
+                      {t("Drop your file here")}
                     </p>
-                    <p className="text-white/60">or click to browse</p>
+                    <p className="text-white/60">{t("or click to browse")}</p>
                   </div>
                 </>
               ) : (
@@ -589,7 +969,7 @@ export default function Summarizer() {
                 <FiUpload className="text-white w-5 h-5" />
               )}
               <span className="text-white text-lg">
-                {isStreaming ? "Analyzing..." : "Analysis"}
+                {isStreaming ? t("Analyzing...") : t("Analysis")}
               </span>
             </button>
 

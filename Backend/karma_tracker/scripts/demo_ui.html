@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KarmaChain Demo UI</title>
+    <style>
+        :root {
+            --primary: #4361ee;
+            --secondary: #3f37c9;
+            --success: #4cc9f0;
+            --warning: #f72585;
+            --danger: #e63946;
+            --light: #f8f9fa;
+            --dark: #212529;
+            --gray: #6c757d;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f7fb;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: var(--primary);
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: var(--secondary);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .btn-success {
+            background: #28a745;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        .btn-warning {
+            background: var(--warning);
+        }
+        
+        .btn-warning:hover {
+            background: #d1146a;
+        }
+        
+        .btn-danger {
+            background: var(--danger);
+        }
+        
+        .btn-danger:hover {
+            background: #c12735;
+        }
+        
+        .results {
+            background: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        
+        .log-entry {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        
+        .log-success {
+            color: #28a745;
+        }
+        
+        .log-error {
+            color: var(--danger);
+        }
+        
+        .log-info {
+            color: var(--primary);
+        }
+        
+        .karma-display {
+            font-size: 2rem;
+            text-align: center;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 20px 0;
+        }
+        
+        .token-balances {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .token-card {
+            background: #e9ecef;
+            border-radius: 5px;
+            padding: 10px;
+            text-align: center;
+        }
+        
+        .token-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .token-value {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            border-radius: 5px 5px 0 0;
+            margin-right: 5px;
+        }
+        
+        .tab.active {
+            background: white;
+            border-bottom: 1px solid white;
+            margin-bottom: -1px;
+            font-weight: 600;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .action-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .action-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .action-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        
+        .action-card h4 {
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+        
+        .action-card p {
+            font-size: 0.9rem;
+            color: var(--gray);
+        }
+        
+        .user-selector {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .user-selector input {
+            flex: 1;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>KarmaChain Demo UI</h1>
+            <p class="subtitle">Interactive demonstration of the Karma Tracker functionality</p>
+        </header>
+        
+        <div class="user-selector">
+            <label for="userId">User ID:</label>
+            <input type="text" id="userId" value="web_demo_user">
+            <button id="loadProfile">Load Profile</button>
+        </div>
+        
+        <div class="dashboard">
+            <div class="left-column">
+                <div class="card">
+                    <div class="card-header">Karma Profile</div>
+                    <div class="karma-display" id="netKarma">0</div>
+                    <div class="form-group">
+                        <label>Merit Score:</label>
+                        <div id="meritScore">0</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Paap Score:</label>
+                        <div id="paapScore">0</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Role:</label>
+                        <div id="userRole">learner</div>
+                    </div>
+                    <button id="refreshProfile">Refresh Profile</button>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">Token Balances</div>
+                    <div class="token-balances" id="tokenBalances">
+                        <!-- Token balances will be populated here -->
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">Corrective Guidance</div>
+                    <div id="guidanceList">
+                        <!-- Guidance will be populated here -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="right-column">
+                <div class="tabs">
+                    <div class="tab active" data-tab="actions">Actions</div>
+                    <div class="tab" data-tab="atonement">Atonement</div>
+                    <div class="tab" data-tab="logs">Activity Log</div>
+                </div>
+                
+                <div class="tab-content active" id="actions-tab">
+                    <div class="card">
+                        <div class="card-header">Log Karma Action</div>
+                        <div class="form-group">
+                            <label for="actionType">Action Type:</label>
+                            <select id="actionType">
+                                <option value="completing_lessons">Completing Lessons</option>
+                                <option value="helping_peers">Helping Peers</option>
+                                <option value="solving_doubts">Solving Doubts</option>
+                                <option value="selfless_service">Selfless Service</option>
+                                <option value="cheat">Cheat</option>
+                                <option value="disrespect_guru">Disrespect Guru</option>
+                                <option value="break_promise">Break Promise</option>
+                                <option value="harm_others">Harm Others</option>
+                                <option value="false_speech">False Speech</option>
+                                <option value="theft">Theft</option>
+                                <option value="violence">Violence</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="actionIntensity">Intensity (0.1-2.0):</label>
+                            <input type="number" id="actionIntensity" min="0.1" max="2.0" step="0.1" value="1.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="actionContext">Context:</label>
+                            <textarea id="actionContext" rows="2" placeholder="Describe the context of the action"></textarea>
+                        </div>
+                        <button id="logAction">Log Action</button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">Quick Actions</div>
+                        <div class="action-grid">
+                            <div class="action-card" data-action="completing_lessons">
+                                <h4>Complete Lesson</h4>
+                                <p>Gain DharmaPoints for learning</p>
+                            </div>
+                            <div class="action-card" data-action="helping_peers">
+                                <h4>Help Peers</h4>
+                                <p>Gain SevaPoints for assistance</p>
+                            </div>
+                            <div class="action-card" data-action="selfless_service">
+                                <h4>Selfless Service</h4>
+                                <p>Gain PunyaTokens for service</p>
+                            </div>
+                            <div class="action-card" data-action="cheat">
+                                <h4>Cheat</h4>
+                                <p>Generate PaapTokens (negative)</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="atonement-tab">
+                    <div class="card">
+                        <div class="card-header">Submit Atonement</div>
+                        <div class="form-group">
+                            <label for="atonementPlanId">Plan ID:</label>
+                            <input type="text" id="atonementPlanId" value="demo_plan_001">
+                        </div>
+                        <div class="form-group">
+                            <label for="atonementType">Atonement Type:</label>
+                            <select id="atonementType">
+                                <option value="Jap">Jap (Mantras)</option>
+                                <option value="Tap">Tap (Austerity)</option>
+                                <option value="Bhakti">Bhakti (Devotion)</option>
+                                <option value="Daan">Daan (Charity)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="atonementAmount">Amount/Units:</label>
+                            <input type="number" id="atonementAmount" min="1" value="108">
+                        </div>
+                        <div class="form-group">
+                            <label for="atonementProof">Proof Text:</label>
+                            <textarea id="atonementProof" rows="3" placeholder="Describe the atonement activity"></textarea>
+                        </div>
+                        <button id="submitAtonement">Submit Atonement</button>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="logs-tab">
+                    <div class="card">
+                        <div class="card-header">Activity Log</div>
+                        <div class="results" id="activityLog">
+                            <div class="log-entry log-info">KarmaChain Demo UI initialized</div>
+                        </div>
+                        <button id="clearLogs">Clear Logs</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>KarmaChain Demo UI - Interactive demonstration of the Karma Tracker functionality</p>
+        </footer>
+    </div>
+
+    <script>
+        // Configuration
+        const BASE_URL = 'http://localhost:8000';
+        
+        // DOM Elements
+        const userIdInput = document.getElementById('userId');
+        const loadProfileBtn = document.getElementById('loadProfile');
+        const refreshProfileBtn = document.getElementById('refreshProfile');
+        const netKarmaDisplay = document.getElementById('netKarma');
+        const meritScoreDisplay = document.getElementById('meritScore');
+        const paapScoreDisplay = document.getElementById('paapScore');
+        const userRoleDisplay = document.getElementById('userRole');
+        const tokenBalancesContainer = document.getElementById('tokenBalances');
+        const guidanceListContainer = document.getElementById('guidanceList');
+        const actionTypeSelect = document.getElementById('actionType');
+        const actionIntensityInput = document.getElementById('actionIntensity');
+        const actionContextInput = document.getElementById('actionContext');
+        const logActionBtn = document.getElementById('logAction');
+        const atonementPlanIdInput = document.getElementById('atonementPlanId');
+        const atonementTypeSelect = document.getElementById('atonementType');
+        const atonementAmountInput = document.getElementById('atonementAmount');
+        const atonementProofInput = document.getElementById('atonementProof');
+        const submitAtonementBtn = document.getElementById('submitAtonement');
+        const activityLogContainer = document.getElementById('activityLog');
+        const clearLogsBtn = document.getElementById('clearLogs');
+        const tabs = document.querySelectorAll('.tab');
+        const tabContents = document.querySelectorAll('.tab-content');
+        const actionCards = document.querySelectorAll('.action-card');
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set up tab switching
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    // Remove active class from all tabs and contents
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tabContents.forEach(tc => tc.classList.remove('active'));
+                    
+                    // Add active class to clicked tab
+                    tab.classList.add('active');
+                    
+                    // Show corresponding content
+                    const tabName = tab.getAttribute('data-tab');
+                    document.getElementById(`${tabName}-tab`).classList.add('active');
+                });
+            });
+            
+            // Set up event listeners
+            loadProfileBtn.addEventListener('click', loadUserProfile);
+            refreshProfileBtn.addEventListener('click', loadUserProfile);
+            logActionBtn.addEventListener('click', logAction);
+            submitAtonementBtn.addEventListener('click', submitAtonement);
+            clearLogsBtn.addEventListener('click', clearLogs);
+            
+            // Set up quick action cards
+            actionCards.forEach(card => {
+                card.addEventListener('click', () => {
+                    const action = card.getAttribute('data-action');
+                    actionTypeSelect.value = action;
+                    logAction();
+                });
+            });
+            
+            // Load initial profile
+            loadUserProfile();
+        });
+        
+        // Helper functions
+        function logMessage(message, type = 'info') {
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            activityLogContainer.appendChild(logEntry);
+            activityLogContainer.scrollTop = activityLogContainer.scrollHeight;
+        }
+        
+        function clearLogs() {
+            activityLogContainer.innerHTML = '';
+            logMessage('Logs cleared');
+        }
+        
+        async function apiRequest(endpoint, method = 'GET', data = null) {
+            try {
+                const url = `${BASE_URL}${endpoint}`;
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                };
+                
+                if (data) {
+                    options.body = JSON.stringify(data);
+                }
+                
+                const response = await fetch(url, options);
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                return await response.json();
+            } catch (error) {
+                logMessage(`API Error: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+        
+        // Main functions
+        async function loadUserProfile() {
+            const userId = userIdInput.value || 'web_demo_user';
+            
+            try {
+                logMessage(`Loading profile for user: ${userId}`);
+                const profile = await apiRequest(`/api/v1/karma/${userId}`, 'GET');
+                
+                // Update display
+                netKarmaDisplay.textContent = profile.net_karma || 0;
+                meritScoreDisplay.textContent = profile.merit_score || 0;
+                paapScoreDisplay.textContent = profile.paap_score || 0;
+                userRoleDisplay.textContent = profile.role || 'learner';
+                
+                // Update token balances
+                updateTokenBalances(profile.balances || {});
+                
+                // Update guidance
+                updateGuidance(profile.corrective_guidance || []);
+                
+                logMessage(`Profile loaded successfully for ${userId}`, 'success');
+            } catch (error) {
+                logMessage(`Failed to load profile: ${error.message}`, 'error');
+                
+                // If user doesn't exist, create with a default action
+                try {
+                    logMessage(`Creating user ${userId} with initial action`);
+                    const actionData = {
+                        user_id: userId,
+                        action: 'completing_lessons',
+                        role: 'learner',
+                        context: 'Initial user creation'
+                    };
+                    
+                    await apiRequest('/api/v1/log-action/', 'POST', actionData);
+                    logMessage(`User ${userId} created successfully`, 'success');
+                    
+                    // Try loading profile again
+                    setTimeout(loadUserProfile, 500);
+                } catch (creationError) {
+                    logMessage(`Failed to create user: ${creationError.message}`, 'error');
+                }
+            }
+        }
+        
+        function updateTokenBalances(balances) {
+            tokenBalancesContainer.innerHTML = '';
+            
+            // Define token display order and labels
+            const tokenLabels = {
+                'DharmaPoints': 'Dharma Points',
+                'SevaPoints': 'Seva Points',
+                'PunyaTokens': 'Punya Tokens',
+                'PaapTokens': 'Paap Tokens',
+                'DridhaKarma': 'Dridha Karma',
+                'AdridhaKarma': 'Adridha Karma',
+                'SanchitaKarma': 'Sanchita Karma',
+                'PrarabdhaKarma': 'Prarabdha Karma'
+            };
+            
+            // Handle nested tokens like PaapTokens
+            for (const [token, value] of Object.entries(balances)) {
+                if (typeof value === 'object' && value !== null) {
+                    // Handle nested tokens (e.g., PaapTokens with severity levels)
+                    for (const [subToken, subValue] of Object.entries(value)) {
+                        const tokenCard = document.createElement('div');
+                        tokenCard.className = 'token-card';
+                        tokenCard.innerHTML = `
+                            <div class="token-name">${tokenLabels[token] || token}.${subToken}</div>
+                            <div class="token-value">${subValue}</div>
+                        `;
+                        tokenBalancesContainer.appendChild(tokenCard);
+                    }
+                } else {
+                    // Handle simple tokens
+                    const tokenCard = document.createElement('div');
+                    tokenCard.className = 'token-card';
+                    tokenCard.innerHTML = `
+                        <div class="token-name">${tokenLabels[token] || token}</div>
+                        <div class="token-value">${value}</div>
+                    `;
+                    tokenBalancesContainer.appendChild(tokenCard);
+                }
+            }
+            
+            // If no tokens, show a message
+            if (tokenBalancesContainer.children.length === 0) {
+                tokenBalancesContainer.innerHTML = '<div class="token-card">No tokens yet</div>';
+            }
+        }
+        
+        function updateGuidance(guidance) {
+            guidanceListContainer.innerHTML = '';
+            
+            if (!guidance || guidance.length === 0) {
+                guidanceListContainer.innerHTML = '<p>No corrective guidance at this time.</p>';
+                return;
+            }
+            
+            guidance.slice(0, 3).forEach(item => {
+                const guidanceItem = document.createElement('div');
+                guidanceItem.className = 'form-group';
+                guidanceItem.innerHTML = `
+                    <strong>${item.practice || 'Recommendation'}:</strong>
+                    <p>${item.reason || 'No details provided'}</p>
+                `;
+                guidanceListContainer.appendChild(guidanceItem);
+            });
+        }
+        
+        async function logAction() {
+            const userId = userIdInput.value || 'web_demo_user';
+            const actionType = actionTypeSelect.value;
+            const intensity = parseFloat(actionIntensityInput.value) || 1.0;
+            const context = actionContextInput.value || `Web UI action: ${actionType}`;
+            
+            const actionData = {
+                user_id: userId,
+                action: actionType,
+                role: 'learner',
+                intensity: intensity,
+                context: context
+            };
+            
+            try {
+                logMessage(`Logging action: ${actionType}`);
+                const result = await apiRequest('/api/v1/log-action/', 'POST', actionData);
+                
+                logMessage(`Action logged successfully: ${result.karma_impact} karma impact`, 'success');
+                
+                // Refresh profile
+                setTimeout(loadUserProfile, 500);
+            } catch (error) {
+                logMessage(`Failed to log action: ${error.message}`, 'error');
+            }
+        }
+        
+        async function submitAtonement() {
+            const userId = userIdInput.value || 'web_demo_user';
+            const planId = atonementPlanIdInput.value || 'demo_plan_001';
+            const atonementType = atonementTypeSelect.value;
+            const amount = parseInt(atonementAmountInput.value) || 108;
+            const proofText = atonementProofInput.value || `Completed ${amount} units of ${atonementType}`;
+            
+            const atonementData = {
+                user_id: userId,
+                plan_id: planId,
+                atonement_type: atonementType,
+                amount: amount,
+                proof_text: proofText
+            };
+            
+            try {
+                logMessage(`Submitting atonement: ${atonementType}`);
+                const result = await apiRequest('/api/v1/submit-atonement/', 'POST', atonementData);
+                
+                logMessage(`Atonement submitted successfully: +${result.karma_adjustment} karma`, 'success');
+                
+                // Refresh profile
+                setTimeout(loadUserProfile, 500);
+            } catch (error) {
+                logMessage(`Failed to submit atonement: ${error.message}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

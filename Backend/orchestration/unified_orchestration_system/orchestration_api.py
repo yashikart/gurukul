@@ -131,7 +131,9 @@ class GeminiAPIManager:
     """
     
     def __init__(self):
-        self.primary_key = os.getenv("GEMINI_API_KEY")
+        # Default Google AI Studio API key
+        default_gemini_key = "AIzaSyDSunIIg6InYPa4yaYhrXKGXO2HTWhi_wc"
+        self.primary_key = os.getenv("GEMINI_API_KEY", default_gemini_key)
         self.backup_key = os.getenv("GEMINI_API_KEY_BACKUP")
         self.current_model = None
         self.current_key_type = None

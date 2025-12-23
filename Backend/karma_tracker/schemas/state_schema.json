@@ -1,0 +1,8 @@
+{
+  "state_id": "uuid",
+  "module": "finance | game | gurukul | insight",
+  "action_type": "string",
+  "weight": "float",
+  "feedback_value": "float",
+  "timestamp": "iso8601"
+}

@@ -1,65 +1,107 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { toast } from "react-hot-toast";
-import { Mail, Lock, LogIn, RefreshCcw } from "lucide-react";
+import { Mail, Lock, LogIn } from "lucide-react";
 import GlassInput from "../components/GlassInput";
 import GlassButton from "../components/GlassButton";
-import { useNavigate, useLocation, Link } from "react-router-dom";
-import { getLastVisitedPath } from "../utils/routeUtils";
-import { useSignIn, useAuth, useUser } from "@clerk/clerk-react";
+import { useNavigate, Link } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import { setUser } from "../store/authSlice";
+import { supabase } from "../supabaseClient";
+import { useTranslation } from "react-i18next";
 
 export default function SignIn() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const location = useLocation();
+  const dispatch = useDispatch();
   const [error, setError] = useState("");
-  const { isLoaded, signIn, setActive } = useSignIn();
-  const { signOut } = useAuth();
-  const { isSignedIn } = useUser();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (isSignedIn) {
-      navigate("/home");
-    }
-  }, [isSignedIn, navigate]);
-
-  // Check for deleted=true parameter in URL
-  useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    if (searchParams.get("deleted") === "true") {
-      // Show a notification that the account was deleted
-      toast.success("Your account has been successfully deleted.", {
-        position: "top-right",
-        icon: "🗑️",
-        duration: 5000,
-        id: "account-deleted",
-      });
-
-      // Remove the parameter from the URL without reloading the page
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, document.title, newUrl);
-    }
-  }, [location]);
-
-  const handleOAuthSignIn = async (provider) => {
+  const handleSignIn = async (e) => {
+    e.preventDefault();
     setError("");
+    setLoading(true);
 
     try {
-      toast.loading("Redirecting to sign in...", {
-        position: "bottom-right",
-        id: "oauth-loading",
+      if (!email || !password) {
+        setError(t("Please enter both email and password."));
+        toast.error(t("Please enter both email and password."), {
+          position: "bottom-right",
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Check network connectivity first
+      if (!navigator.onLine) {
+        throw new Error(t("No internet connection. Please check your network."));
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
 
-      await signIn.authenticateWithRedirect({
-        strategy: provider === "google" ? "oauth_google" : provider,
-        redirectUrl: "/auth/callback",
-        redirectUrlComplete: "/home",
-      });
-    } catch (err) {
-      toast.dismiss("oauth-loading");
-      console.error("OAuth sign in error:", err);
-      setError(err.errors?.[0]?.longMessage || err.message || "Failed to sign in");
-      toast.error("Authentication failed. Please try again.", {
+      if (error) throw error;
+
+      // Update Redux store with user data
+      dispatch(
+        setUser({
+          id: data.user.id,
+          email: data.user.email,
+          user_metadata: {
+            avatar_url: data.user.user_metadata?.avatar_url || null,
+            full_name: data.user.user_metadata?.full_name || data.user.email || null,
+          },
+        })
+      );
+
+      toast.success(t("Logged in successfully!"), {
         position: "bottom-right",
+        id: "auth-success",
       });
+
+      navigate("/dashboard");
+    } catch (err) {
+      console.error("Sign in error:", err);
+      
+      // Handle specific error cases
+      if (err.message?.includes("Invalid login credentials") || err.message?.includes("Invalid login")) {
+        setError(t("Invalid email or password. Please try again."));
+        toast.error(t("Invalid email or password. Please try again."), {
+          position: "bottom-right",
+          duration: 5000,
+        });
+      } else if (err.message?.includes("Failed to fetch") || err.name === "AuthRetryableFetchError") {
+        const errorMessage = t("Network error: Unable to connect to authentication service. Please check your internet connection and try again.");
+        setError(errorMessage);
+        toast.error(errorMessage, {
+          position: "bottom-right",
+          duration: 7000,
+        });
+        console.error("Network error details:", {
+          message: err.message,
+          name: err.name,
+          stack: err.stack,
+          online: navigator.onLine,
+        });
+      } else if (err.message?.includes("No internet connection")) {
+        setError(t(err.message));
+        toast.error(t(err.message), {
+          position: "bottom-right",
+          duration: 5000,
+        });
+      } else {
+        const errorMessage = err.message || t("Failed to sign in. Please try again.");
+        setError(errorMessage);
+        toast.error(errorMessage, {
+          position: "bottom-right",
+          duration: 5000,
+        });
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -87,96 +129,50 @@ export default function SignIn() {
             textShadow: "0 2px 4px rgba(0,0,0,0.15)",
           }}
         >
-          Sign In
+          {t("Sign In")}
         </h1>
         <div className="w-full flex flex-col gap-4 items-center">
           <form
             className="flex flex-col gap-3 w-full items-center"
             autoComplete="on"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setError("");
-
-              const loadingToast = toast.loading("Signing in...", {
-                position: "bottom-right",
-              });
-
-              try {
-                const email = e.target.email.value;
-                const password = e.target.password.value;
-
-                if (!email || !password) {
-                  setError("Please enter both email and password.");
-                  toast.error("Please enter both email and password.", {
-                    position: "bottom-right",
-                  });
-                  return;
-                }
-
-                if (!isLoaded) return; // Clerk not ready yet
-
-                const result = await signIn.create({ identifier: email, password });
-
-                if (result?.status === "complete") {
-                  await setActive({ session: result.createdSessionId });
-                  toast.dismiss(loadingToast);
-                  toast.success("Logged in successfully!", {
-                    position: "bottom-right",
-                    id: "auth-success",
-                  });
-                  navigate(getLastVisitedPath());
-                } else {
-                  throw new Error("Sign in not completed");
-                }
-              } catch (err) {
-                toast.dismiss(loadingToast);
-                const errorMessage = err.errors?.[0]?.longMessage || err.message || "Failed to sign in. Please try again.";
-                setError(errorMessage);
-                toast.error(errorMessage, {
-                  position: "bottom-right",
-                  duration: 5000,
-                });
-              }
-            }}
+            onSubmit={handleSignIn}
           >
             <GlassInput
               name="email"
               type="email"
-              placeholder="Email"
+              placeholder={t("Email")}
               icon={Mail}
               autoComplete="username"
               required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
             />
             <GlassInput
               name="password"
               type="password"
-              placeholder="Password"
+              placeholder={t("Password")}
               icon={Lock}
               autoComplete="current-password"
               required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
             />
             <GlassButton
               type="submit"
               icon={LogIn}
               className="w-full mt-2"
               variant="primary"
+              disabled={loading}
             >
-              Sign in with Email
+              {loading ? t("Signing in...") : t("Sign In")}
             </GlassButton>
           </form>
-          <GlassButton
-            type="button"
-            icon={RefreshCcw}
-            onClick={() => handleOAuthSignIn("google")}
-            className="w-full mt-3"
-          >
-            Sign in with Google
-          </GlassButton>
           {error && (
             <div className="text-red-300 text-sm mt-4 font-semibold">
               {error}
             </div>
           )}
+          
           <div className="mt-7 flex flex-col gap-3 items-center text-sm">
             <div className="w-full border-t border-white/20 my-2"></div>
             {/* Forgot Password link */}
@@ -184,7 +180,7 @@ export default function SignIn() {
               to="/forgotpassword"
               className="text-white hover:text-[#FFD700] transition-colors"
             >
-              Forgot Password?
+              {t("Forgot Password?")}
             </Link>
 
             {/* Sign Up link */}
@@ -192,7 +188,7 @@ export default function SignIn() {
               to="/signup"
               className="text-white hover:text-[#FFD700] transition-colors font-medium"
             >
-              Don't have an account? Sign Up
+              {t("Don't have an account? Sign Up")}
             </Link>
           </div>
         </div>

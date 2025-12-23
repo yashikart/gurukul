@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  karma-api:
+    build: .
+    container_name: karma-api
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/karmachain
+      - DATABASE_NAME=karmachain
+      - SECRET_KEY=your-secret-key-here
+      - DEBUG=false
+      - LOG_LEVEL=info
+      - MAX_FILE_SIZE=1048576  # 1MB for file uploads
+      - EVENT_RETENTION_DAYS=90  # Keep events for 90 days
+      - EVENT_CLEANUP_INTERVAL=86400  # Daily cleanup
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+      - ./:/app
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads  # For temporary file uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - karma-network
+
+  mongo:
+    image: mongo:6.0
+    container_name: karma-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=karmachain
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=admin123
+      - MONGO_INITDB_USERNAME=karmachain_user
+      - MONGO_INITDB_PASSWORD=karmachain_pass
+    volumes:
+      - karma_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
+      - ./backups:/backups  # For backup operations
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - karma-network
+    command: [--auth, --bind_ip_all, --wiredTigerCacheSizeGB=2]
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: karma-mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=admin123
+      - ME_CONFIG_MONGODB_URL=mongodb://admin:admin123@mongo:27017/
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - karma-network
+
+volumes:
+  karma_data:
+    driver: local
+
+networks:
+  karma-network:
+    driver: bridge

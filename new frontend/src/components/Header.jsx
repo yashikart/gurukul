@@ -1,23 +1,30 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, NavLink, useLocation } from "react-router-dom";
-import { useUser, useClerk } from "@clerk/clerk-react";
+import { supabase } from "../supabaseClient";
 import gsap from "gsap";
 import { useGSAP } from "../hooks/useGSAP";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Globe, ChevronDown } from "lucide-react";
+import { useSettings } from "../hooks/useSettings";
+import { useTranslation } from "react-i18next";
 import "../styles/header.css";
 
 export default function Header({ onToggleSidebar, sidebarCollapsed }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [avatarUrl, setAvatarUrl] = useState("");
-  const { isSignedIn, user } = useUser();
-  const { signOut } = useClerk();
+  const [user, setUser] = useState(null);
+  const [session, setSession] = useState(null);
+  const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
+  const { language, updateLanguage } = useSettings();
+  const { t } = useTranslation();
+  const languageDropdownRef = useRef(null);
 
   // Refs for GSAP animations
   const headerRef = useRef(null);
   const logoRef = useRef(null);
   const aboutLinkRef = useRef(null);
   const logoutBtnRef = useRef(null);
+  const languageBtnRef = useRef(null);
 
   // We'll use CSS hover effects instead of GSAP for better reliability
 
@@ -32,7 +39,7 @@ export default function Header({ onToggleSidebar, sidebarCollapsed }) {
 
     // Staggered animation for header elements
     gsap.fromTo(
-      [logoRef.current, aboutLinkRef.current, logoutBtnRef.current],
+      [logoRef.current, aboutLinkRef.current, languageBtnRef.current, logoutBtnRef.current],
       { y: -20, opacity: 0 },
       {
         y: 0,
@@ -161,13 +168,91 @@ export default function Header({ onToggleSidebar, sidebarCollapsed }) {
     };
   }, [location.pathname]);
 
+  // Get user session
   useEffect(() => {
-    if (isSignedIn && user) {
-      setAvatarUrl(user.imageUrl || "https://ui-avatars.com/api/?name=User");
-    } else {
-      setAvatarUrl("");
+    const fetchSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
+      if (session) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email,
+          user_metadata: {
+            avatar_url: session.user.user_metadata?.avatar_url || null,
+            full_name: session.user.user_metadata?.full_name || session.user.email || null,
+          },
+        });
+        
+        // Set avatar URL
+        setAvatarUrl(session.user.user_metadata?.avatar_url || 
+                   `https://ui-avatars.com/api/?name=${encodeURIComponent(session.user.email || 'User')}`);
+      } else {
+        setUser(null);
+        setAvatarUrl("");
+      }
+    };
+
+    fetchSession();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email,
+          user_metadata: {
+            avatar_url: session.user.user_metadata?.avatar_url || null,
+            full_name: session.user.user_metadata?.full_name || session.user.email || null,
+          },
+        });
+        
+        // Set avatar URL
+        setAvatarUrl(session.user.user_metadata?.avatar_url || 
+                   `https://ui-avatars.com/api/?name=${encodeURIComponent(session.user.email || 'User')}`);
+      } else {
+        setUser(null);
+        setAvatarUrl("");
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Close language dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        languageDropdownRef.current &&
+        !languageDropdownRef.current.contains(event.target) &&
+        languageBtnRef.current &&
+        !languageBtnRef.current.contains(event.target)
+      ) {
+        setIsLanguageDropdownOpen(false);
+      }
+    };
+
+    if (isLanguageDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
     }
-  }, [isSignedIn, user]);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isLanguageDropdownOpen]);
+
+  // Handle language change
+  const handleLanguageChange = (newLanguage) => {
+    updateLanguage(newLanguage);
+    setIsLanguageDropdownOpen(false);
+  };
+
+  const languages = [
+    { code: "english", label: "English", nativeLabel: "English" },
+    { code: "arabic", label: "Arabic", nativeLabel: "العربية" },
+  ];
 
   const handleLogout = async () => {
     // Click animation - faster and smoother
@@ -184,12 +269,14 @@ export default function Header({ onToggleSidebar, sidebarCollapsed }) {
               ease: "power2.out",
             });
           }
-          await signOut();
+          // Sign out from Supabase
+          await supabase.auth.signOut();
           navigate("/signin");
         },
       });
     } else {
-      await signOut();
+      // Sign out from Supabase
+      await supabase.auth.signOut();
       navigate("/signin");
     }
   };
@@ -198,7 +285,7 @@ export default function Header({ onToggleSidebar, sidebarCollapsed }) {
     // Click animation - faster and smoother
     if (logoRef.current) {
       gsap.to(logoRef.current, {
-        scale: 0.97,
+        scale: 0.95,
         duration: 0.07,
         ease: "power2.in",
         onComplete: () => {
@@ -209,85 +296,142 @@ export default function Header({ onToggleSidebar, sidebarCollapsed }) {
               ease: "power2.out",
             });
           }
-          navigate("/");
+          navigate("/home");
         },
       });
     } else {
-      // If logo ref is not available, just navigate
-      navigate("/");
+      navigate("/home");
     }
   };
 
   return (
-    <header ref={headerRef} className="header glassy-header">
-      <div className="header-left flex items-center">
-        {/* Show hamburger menu on desktop only, hidden on mobile since we have bottom navigation */}
-        <button
-          className="hidden md:block w-9 h-9 rounded-full bg-white/10 flex items-center justify-center mr-2"
-          onClick={() => {
-            // simple click feedback
-            if (onToggleSidebar) {
-              gsap.to(headerRef.current, {
-                scale: 0.99,
-                duration: 0.07,
-                ease: "power2.in",
-                onComplete: () => {
-                  gsap.to(headerRef.current, {
-                    scale: 1,
-                    duration: 0.1,
-                    ease: "power2.out",
-                  });
-                },
-              });
-              onToggleSidebar();
-            }
-          }}
-          aria-label="Toggle menu"
-        >
-          {sidebarCollapsed ? (
-            <Menu size={18} className="text-white" />
-          ) : (
-            <X size={18} className="text-white" />
-          )}
-        </button>
-        <span
-          ref={logoRef}
-          className="logo hover-effect"
-          onClick={handleLogoClick}
-        >
-          Gurukul
-        </span>
+    <header
+      ref={headerRef}
+      className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 backdrop-blur-md bg-white/5 border-b border-white/10"
+    >
+      {/* Logo */}
+      <div
+        ref={logoRef}
+        onClick={handleLogoClick}
+        className="cursor-pointer flex items-center space-x-2 sm:space-x-3 transition-transform duration-150 ease-out hover:scale-105"
+      >
+        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#FF9933] to-[#e94560] flex items-center justify-center">
+          <span className="text-white font-bold text-sm sm:text-base">G</span>
+        </div>
+        <h1 className="text-white font-bold text-lg sm:text-xl tracking-wide">
+          {t("Gurukul")}
+        </h1>
       </div>
-      <div className="header-right">
+
+      {/* Desktop Navigation */}
+      <nav className="hidden md:flex items-center space-x-1">
         <NavLink
           ref={aboutLinkRef}
           to="/about"
           className={({ isActive }) =>
-            (isActive
-              ? "about-link hover-effect active"
-              : "about-link hover-effect") + " hidden md:inline-flex"
+            `px-4 py-2 rounded-lg transition-all duration-200 ${
+              isActive
+                ? "text-[#FFA94D] bg-white/10"
+                : "text-white hover:text-[#FFA94D] hover:bg-white/10"
+            }`
           }
         >
-          <span>About</span>
+          {t("About")}
         </NavLink>
-        <button
-          ref={logoutBtnRef}
-          className="logout-btn hover-effect"
-          onClick={handleLogout}
-        >
-          <span className="logout-text hidden sm:inline">
-            <span>Sign Out</span>
-          </span>
-          {avatarUrl && (
-            <img
-              src={avatarUrl}
-              alt="avatar"
-              className="avatar"
-              onError={(e) => {
-                e.target.onerror = null;
-                e.target.src = "https://ui-avatars.com/api/?name=User";
+      </nav>
+
+      {/* User Actions */}
+      <div className="flex items-center space-x-3">
+        {/* Language Switcher */}
+        <div className="relative">
+          <button
+            ref={languageBtnRef}
+            onClick={() => setIsLanguageDropdownOpen(!isLanguageDropdownOpen)}
+            className="px-3 py-1.5 sm:px-4 sm:py-2 text-white text-sm font-medium rounded-full bg-white/12 hover:bg-white/20 transition-all duration-200 border-2 border-transparent flex items-center space-x-2"
+            aria-label="Change language"
+          >
+            <Globe className="w-4 h-4" />
+            <span className="hidden sm:inline">
+              {languages.find((lang) => lang.code === language)?.nativeLabel || "English"}
+            </span>
+            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isLanguageDropdownOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          {/* Language Dropdown */}
+          {isLanguageDropdownOpen && (
+            <div
+              ref={languageDropdownRef}
+              className="absolute right-0 mt-2 w-48 bg-white/10 backdrop-blur-md border border-white/20 rounded-lg shadow-lg overflow-hidden z-50"
+              style={{
+                animation: "fadeIn 0.2s ease-out",
               }}
-            />
+            >
+              {languages.map((lang) => (
+                <button
+                  key={lang.code}
+                  onClick={() => handleLanguageChange(lang.code)}
+                  className={`w-full px-4 py-2.5 text-sm transition-all duration-200 flex items-center justify-between ${
+                    language === lang.code
+                      ? "bg-[#FF9933]/30 text-[#FFA94D] font-medium"
+                      : "text-white hover:bg-white/10"
+                  } ${lang.code === "arabic" ? "text-right" : "text-left"}`}
+                  dir={lang.code === "arabic" ? "rtl" : "ltr"}
+                >
+                  <span>{lang.nativeLabel}</span>
+                  {language === lang.code && (
+                    <span className="text-[#FFA94D]">{lang.code === "arabic" ? "✓" : "✓"}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Avatar and Logout for authenticated users */}
+        {session && user ? (
+          <>
+            <div className="hidden sm:flex items-center space-x-3">
+              <div className="flex items-center space-x-2">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="User Avatar"
+                    className="w-8 h-8 rounded-full object-cover border-2 border-white/20"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#FF9933] to-[#e94560] flex items-center justify-center">
+                    <span className="text-white font-bold text-xs">
+                      {user.user_metadata?.full_name?.charAt(0) ||
+                        user.email?.charAt(0) ||
+                        "U"}
+                    </span>
+                  </div>
+                )}
+                <span className="text-white text-sm font-medium hidden lg:inline">
+                  {user.user_metadata?.full_name || user.email}
+                </span>
+              </div>
+            </div>
+
+            <button
+              ref={logoutBtnRef}
+              onClick={handleLogout}
+              className="px-3 py-1.5 sm:px-4 sm:py-2 text-white text-sm font-medium rounded-full bg-white/12 hover:bg-white/20 transition-all duration-200 border-2 border-transparent"
+            >
+              {t("Sign Out")}
+            </button>
+          </>
+        ) : null}
+
+        {/* Mobile menu button */}
+        <button
+          onClick={onToggleSidebar}
+          className="md:hidden p-2 rounded-lg text-white hover:bg-white/10 transition-colors"
+        >
+          {sidebarCollapsed ? (
+            <Menu className="w-6 h-6" />
+          ) : (
+            <X className="w-6 h-6" />
           )}
         </button>
       </div>

@@ -1,0 +1,463 @@
+{
+  "simulation_started": "2025-12-06T15:30:00Z",
+  "cycles_requested": 50,
+  "cycles_completed": 50,
+  "events": [
+    {
+      "cycle": 1,
+      "user_id": "sim_user_a1b2c3d4e5f6",
+      "karma_change": 15.0,
+      "new_prarabdha": 15.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 2,
+      "user_id": "sim_user_a1b2c3d4e5f6",
+      "karma_change": -8.0,
+      "new_prarabdha": 7.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 3,
+      "user_id": "sim_user_a1b2c3d4e5f6",
+      "karma_change": 22.0,
+      "new_prarabdha": 29.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 4,
+      "user_id": "sim_user_a1b2c3d4e5f6",
+      "karma_change": -12.0,
+      "new_prarabdha": 17.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 5,
+      "user_id": "sim_user_a1b2c3d4e5f6",
+      "karma_change": 50.0,
+      "new_prarabdha": 67.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 6,
+      "user_id": "sim_user_a1b2c3d4e5f6",
+      "karma_change": -20.0,
+      "new_prarabdha": 47.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 7,
+      "user_id": "sim_user_a1b2c3d4e5f6",
+      "karma_change": 18.0,
+      "new_prarabdha": 65.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 8,
+      "user_id": "sim_user_a1b2c3d4e5f6",
+      "karma_change": -15.0,
+      "new_prarabdha": 50.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 9,
+      "user_id": "sim_user_a1b2c3d4e5f6",
+      "karma_change": 25.0,
+      "new_prarabdha": 75.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 10,
+      "user_id": "sim_user_a1b2c3d4e5f6",
+      "karma_change": -50.0,
+      "new_prarabdha": 25.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 10,
+      "user_id": "sim_user_a1b2c3d4e5f6",
+      "event_type": "death",
+      "loka": "Mrityuloka",
+      "description": "The mortal realm, where souls continue their journey.",
+      "inheritance": {
+        "inherited_sanchita": 80.0,
+        "carryover_positive": 5.0,
+        "carryover_negative": 0.0,
+        "net_karma": 25.0
+      }
+    },
+    {
+      "cycle": 10,
+      "old_user_id": "sim_user_a1b2c3d4e5f6",
+      "new_user_id": "sim_user_b2c3d4e5f6a7",
+      "event_type": "rebirth",
+      "inheritance": {
+        "inherited_sanchita": 80.0,
+        "carryover_positive": 5.0,
+        "carryover_negative": 0.0,
+        "net_karma": 25.0
+      },
+      "starting_level": "volunteer"
+    },
+    {
+      "cycle": 11,
+      "user_id": "sim_user_b2c3d4e5f6a7",
+      "karma_change": 12.0,
+      "new_prarabdha": 12.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 12,
+      "user_id": "sim_user_b2c3d4e5f6a7",
+      "karma_change": -10.0,
+      "new_prarabdha": 2.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 13,
+      "user_id": "sim_user_b2c3d4e5f6a7",
+      "karma_change": 20.0,
+      "new_prarabdha": 22.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 14,
+      "user_id": "sim_user_b2c3d4e5f6a7",
+      "karma_change": -15.0,
+      "new_prarabdha": 7.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 15,
+      "user_id": "sim_user_b2c3d4e5f6a7",
+      "karma_change": 45.0,
+      "new_prarabdha": 52.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 16,
+      "user_id": "sim_user_b2c3d4e5f6a7",
+      "karma_change": -25.0,
+      "new_prarabdha": 27.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 17,
+      "user_id": "sim_user_b2c3d4e5f6a7",
+      "karma_change": 16.0,
+      "new_prarabdha": 43.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 18,
+      "user_id": "sim_user_b2c3d4e5f6a7",
+      "karma_change": -18.0,
+      "new_prarabdha": 25.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 19,
+      "user_id": "sim_user_b2c3d4e5f6a7",
+      "karma_change": 30.0,
+      "new_prarabdha": 55.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 20,
+      "user_id": "sim_user_b2c3d4e5f6a7",
+      "karma_change": -50.0,
+      "new_prarabdha": 5.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 20,
+      "user_id": "sim_user_b2c3d4e5f6a7",
+      "event_type": "death",
+      "loka": "Mrityuloka",
+      "description": "The mortal realm, where souls continue their journey.",
+      "inheritance": {
+        "inherited_sanchita": 85.0,
+        "carryover_positive": 1.0,
+        "carryover_negative": 0.0,
+        "net_karma": 5.0
+      }
+    },
+    {
+      "cycle": 20,
+      "old_user_id": "sim_user_b2c3d4e5f6a7",
+      "new_user_id": "sim_user_c3d4e5f6a7b8",
+      "event_type": "rebirth",
+      "inheritance": {
+        "inherited_sanchita": 85.0,
+        "carryover_positive": 1.0,
+        "carryover_negative": 0.0,
+        "net_karma": 5.0
+      },
+      "starting_level": "volunteer"
+    },
+    {
+      "cycle": 21,
+      "user_id": "sim_user_c3d4e5f6a7b8",
+      "karma_change": 14.0,
+      "new_prarabdha": 14.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 22,
+      "user_id": "sim_user_c3d4e5f6a7b8",
+      "karma_change": -12.0,
+      "new_prarabdha": 2.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 23,
+      "user_id": "sim_user_c3d4e5f6a7b8",
+      "karma_change": 24.0,
+      "new_prarabdha": 26.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 24,
+      "user_id": "sim_user_c3d4e5f6a7b8",
+      "karma_change": -16.0,
+      "new_prarabdha": 10.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 25,
+      "user_id": "sim_user_c3d4e5f6a7b8",
+      "karma_change": 48.0,
+      "new_prarabdha": 58.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 26,
+      "user_id": "sim_user_c3d4e5f6a7b8",
+      "karma_change": -28.0,
+      "new_prarabdha": 30.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 27,
+      "user_id": "sim_user_c3d4e5f6a7b8",
+      "karma_change": 18.0,
+      "new_prarabdha": 48.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 28,
+      "user_id": "sim_user_c3d4e5f6a7b8",
+      "karma_change": -20.0,
+      "new_prarabdha": 28.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 29,
+      "user_id": "sim_user_c3d4e5f6a7b8",
+      "karma_change": 32.0,
+      "new_prarabdha": 60.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 30,
+      "user_id": "sim_user_c3d4e5f6a7b8",
+      "karma_change": -50.0,
+      "new_prarabdha": 10.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 30,
+      "user_id": "sim_user_c3d4e5f6a7b8",
+      "event_type": "death",
+      "loka": "Mrityuloka",
+      "description": "The mortal realm, where souls continue their journey.",
+      "inheritance": {
+        "inherited_sanchita": 92.0,
+        "carryover_positive": 2.0,
+        "carryover_negative": 0.0,
+        "net_karma": 10.0
+      }
+    },
+    {
+      "cycle": 30,
+      "old_user_id": "sim_user_c3d4e5f6a7b8",
+      "new_user_id": "sim_user_d4e5f6a7b8c9",
+      "event_type": "rebirth",
+      "inheritance": {
+        "inherited_sanchita": 92.0,
+        "carryover_positive": 2.0,
+        "carryover_negative": 0.0,
+        "net_karma": 10.0
+      },
+      "starting_level": "volunteer"
+    },
+    {
+      "cycle": 31,
+      "user_id": "sim_user_d4e5f6a7b8c9",
+      "karma_change": 16.0,
+      "new_prarabdha": 16.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 32,
+      "user_id": "sim_user_d4e5f6a7b8c9",
+      "karma_change": -14.0,
+      "new_prarabdha": 2.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 33,
+      "user_id": "sim_user_d4e5f6a7b8c9",
+      "karma_change": 26.0,
+      "new_prarabdha": 28.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 34,
+      "user_id": "sim_user_d4e5f6a7b8c9",
+      "karma_change": -18.0,
+      "new_prarabdha": 10.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 35,
+      "user_id": "sim_user_d4e5f6a7b8c9",
+      "karma_change": 50.0,
+      "new_prarabdha": 60.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 36,
+      "user_id": "sim_user_d4e5f6a7b8c9",
+      "karma_change": -30.0,
+      "new_prarabdha": 30.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 37,
+      "user_id": "sim_user_d4e5f6a7b8c9",
+      "karma_change": 20.0,
+      "new_prarabdha": 50.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 38,
+      "user_id": "sim_user_d4e5f6a7b8c9",
+      "karma_change": -22.0,
+      "new_prarabdha": 28.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 39,
+      "user_id": "sim_user_d4e5f6a7b8c9",
+      "karma_change": 34.0,
+      "new_prarabdha": 62.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 40,
+      "user_id": "sim_user_d4e5f6a7b8c9",
+      "karma_change": -50.0,
+      "new_prarabdha": 12.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 40,
+      "user_id": "sim_user_d4e5f6a7b8c9",
+      "event_type": "death",
+      "loka": "Mrityuloka",
+      "description": "The mortal realm, where souls continue their journey.",
+      "inheritance": {
+        "inherited_sanchita": 98.0,
+        "carryover_positive": 2.4,
+        "carryover_negative": 0.0,
+        "net_karma": 12.0
+      }
+    },
+    {
+      "cycle": 40,
+      "old_user_id": "sim_user_d4e5f6a7b8c9",
+      "new_user_id": "sim_user_e5f6a7b8c9d0",
+      "event_type": "rebirth",
+      "inheritance": {
+        "inherited_sanchita": 98.0,
+        "carryover_positive": 2.4,
+        "carryover_negative": 0.0,
+        "net_karma": 12.0
+      },
+      "starting_level": "volunteer"
+    },
+    {
+      "cycle": 41,
+      "user_id": "sim_user_e5f6a7b8c9d0",
+      "karma_change": 18.0,
+      "new_prarabdha": 18.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 42,
+      "user_id": "sim_user_e5f6a7b8c9d0",
+      "karma_change": -16.0,
+      "new_prarabdha": 2.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 43,
+      "user_id": "sim_user_e5f6a7b8c9d0",
+      "karma_change": 28.0,
+      "new_prarabdha": 30.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 44,
+      "user_id": "sim_user_e5f6a7b8c9d0",
+      "karma_change": -20.0,
+      "new_prarabdha": 10.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 45,
+      "user_id": "sim_user_e5f6a7b8c9d0",
+      "karma_change": 52.0,
+      "new_prarabdha": 62.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 46,
+      "user_id": "sim_user_e5f6a7b8c9d0",
+      "karma_change": -32.0,
+      "new_prarabdha": 30.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 47,
+      "user_id": "sim_user_e5f6a7b8c9d0",
+      "karma_change": 22.0,
+      "new_prarabdha": 52.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 48,
+      "user_id": "sim_user_e5f6a7b8c9d0",
+      "karma_change": -24.0,
+      "new_prarabdha": 28.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 49,
+      "user_id": "sim_user_e5f6a7b8c9d0",
+      "karma_change": 36.0,
+      "new_prarabdha": 64.0,
+      "event_type": "karmic_action"
+    },
+    {
+      "cycle": 50,
+      "user_id": "sim_user_e5f6a7b8c9d0",
+      "karma_change": -50.0,
+      "new_prarabdha": 14.0,
+      "event_type": "karmic_action"
+    }
+  ],
+  "simulation_completed": "2025-12-06T15:35:00Z",
+  "final_user_id": "sim_user_e5f6a7b8c9d0"
+}

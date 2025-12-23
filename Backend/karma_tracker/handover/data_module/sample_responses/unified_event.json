@@ -1,0 +1,226 @@
+{
+  "regular_atonement": {
+    "event_id": "evt_1234567890",
+    "event_type": "atonement",
+    "data": {
+      "user_id": "user123",
+      "plan_id": "plan_abc123",
+      "atonement_type": "paap_medium",
+      "amount": 50,
+      "proof_text": "Donated to local food bank, receipt #FB2024001",
+      "tx_hash": "68e6377db97052863ba2e8fa"
+    },
+    "timestamp": "2024-01-15T14:30:00Z",
+    "source": "user",
+    "status": "processed",
+    "response_data": {
+      "message": "Atonement submitted successfully",
+      "atonement_id": "atonement_xyz789",
+      "tokens_burned": 50,
+      "new_balance": {
+        "punya_tokens": 120,
+        "seva_points": 85,
+        "paap_tokens": 30
+      }
+    },
+    "error_message": null,
+    "created_at": "2024-01-15T14:30:00Z",
+    "updated_at": "2024-01-15T14:30:02Z"
+  },
+  "atonement_with_file": {
+    "event_id": "evt_0987654321",
+    "event_type": "atonement_with_file",
+    "data": {
+      "user_id": "user456",
+      "plan_id": "plan_def456",
+      "atonement_type": "paap_major",
+      "amount": 100,
+      "proof_text": "Community service at local shelter for 20 hours [FILE: plan_def456_20240115143000]",
+      "tx_hash": "0x9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0",
+      "has_file": true,
+      "file_name": "community_service_receipt.pdf"
+    },
+    "timestamp": "2024-01-15T14:30:00Z",
+    "source": "user",
+    "status": "processed",
+    "response_data": {
+      "message": "Atonement with file submitted successfully",
+      "atonement_id": "atonement_abc123",
+      "tokens_burned": 100,
+      "file_reference": "plan_def456_20240115143000",
+      "file_size": 245760,
+      "validation_status": "approved",
+      "new_balance": {
+        "punya_tokens": 200,
+        "seva_points": 150,
+        "paap_tokens": 50
+      }
+    },
+    "error_message": null,
+    "created_at": "2024-01-15T14:30:00Z",
+    "updated_at": "2024-01-15T14:30:05Z"
+  },
+  "failed_event": {
+    "event_id": "evt_failed_123",
+    "event_type": "atonement",
+    "data": {
+      "user_id": "user789",
+      "plan_id": "plan_invalid",
+      "atonement_type": "paap_minor",
+      "amount": 25,
+      "proof_text": "Donated to charity",
+      "tx_hash": null
+    },
+    "timestamp": "2024-01-15T14:30:00Z",
+    "source": "user",
+    "status": "failed",
+    "response_data": null,
+    "error_message": "Atonement plan not found: plan_invalid",
+    "created_at": "2024-01-15T14:30:00Z",
+    "updated_at": "2024-01-15T14:30:01Z"
+  },
+  "life_event": {
+    "event_id": "evt_life_456",
+    "event_type": "life_event",
+    "data": {
+      "user_id": "user123",
+      "action": "helped_elderly_cross_street",
+      "role": "student",
+      "intent": "genuine",
+      "impact": "medium",
+      "context": "daily_life"
+    },
+    "timestamp": "2024-01-15T14:30:00Z",
+    "source": "system",
+    "status": "processed",
+    "response_data": {
+      "message": "Life event logged successfully",
+      "tokens_earned": 15,
+      "new_balance": {
+        "punya_tokens": 135,
+        "seva_points": 95,
+        "paap_tokens": 30
+      },
+      "role_progression": {
+        "current_role": "student",
+        "progress_percentage": 75,
+        "next_role": "teacher"
+      }
+    },
+    "error_message": null,
+    "created_at": "2024-01-15T14:30:00Z",
+    "updated_at": "2024-01-15T14:30:01Z"
+  },
+  "appeal_event": {
+    "event_id": "evt_appeal_789",
+    "event_type": "appeal",
+    "data": {
+      "user_id": "user456",
+      "action_id": "action_123",
+      "reason": "misunderstanding",
+      "explanation": "I was helping someone, not cheating"
+    },
+    "timestamp": "2024-01-15T14:30:00Z",
+    "source": "user",
+    "status": "processed",
+    "response_data": {
+      "message": "Appeal processed successfully",
+      "appeal_id": "appeal_456",
+      "atonement_plan": {
+        "plan_id": "plan_ghi789",
+        "atonement_type": "paap_minor",
+        "tasks": [
+          "Volunteer 10 hours at community center",
+          "Write reflection essay on honesty"
+        ],
+        "total_tokens": 25
+      },
+      "original_action": "overturned",
+      "paap_tokens_removed": 25
+    },
+    "error_message": null,
+    "created_at": "2024-01-15T14:30:00Z",
+    "updated_at": "2024-01-15T14:30:03Z"
+  },
+  "death_event": {
+    "event_id": "evt_death_999",
+    "event_type": "death_event",
+    "data": {
+      "user_id": "user999",
+      "loka": "svarga",
+      "net_karma": 500,
+      "merit_score": 750,
+      "paap_tokens_status": {
+        "minor": 0,
+        "medium": 0,
+        "maha": 0,
+        "total": 0,
+        "status": "all_resolved"
+      }
+    },
+    "timestamp": "2024-01-15T14:30:00Z",
+    "source": "system",
+    "status": "processed",
+    "response_data": {
+      "message": "Death event processed successfully",
+      "loka_assignment": "svarga",
+      "carryover": {
+        "net_karma": 250,
+        "merit_carryover": 375,
+        "role_carryover": "teacher"
+      },
+      "rebirth_count": 3,
+      "final_balances": {
+        "punya_tokens": 600,
+        "seva_points": 450,
+        "paap_tokens": 0
+      }
+    },
+    "error_message": null,
+    "created_at": "2024-01-15T14:30:00Z",
+    "updated_at": "2024-01-15T14:30:04Z"
+  },
+  "stats_request": {
+    "event_id": "evt_stats_111",
+    "event_type": "stats_request",
+    "data": {
+      "request_type": "user_stats",
+      "user_id": "user123",
+      "include_history": true
+    },
+    "timestamp": "2024-01-15T14:30:00Z",
+    "source": "user",
+    "status": "processed",
+    "response_data": {
+      "user_stats": {
+        "user_id": "user123",
+        "net_karma": 175,
+        "token_balances": {
+          "punya_tokens": 135,
+          "seva_points": 95,
+          "paap_tokens": 30
+        },
+        "current_role": "student",
+        "actions_performed": 42,
+        "atonements_completed": 3,
+        "appeals_filed": 1,
+        "appeals_successful": 1
+      },
+      "history": [
+        {
+          "timestamp": "2024-01-14T10:00:00Z",
+          "action": "helped_elderly_cross_street",
+          "tokens_earned": 15
+        },
+        {
+          "timestamp": "2024-01-13T15:30:00Z",
+          "action": "donated_to_charity",
+          "tokens_earned": 25
+        }
+      ]
+    },
+    "error_message": null,
+    "created_at": "2024-01-15T14:30:00Z",
+    "updated_at": "2024-01-15T14:30:01Z"
+  }
+}

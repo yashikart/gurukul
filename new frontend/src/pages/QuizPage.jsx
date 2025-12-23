@@ -3,10 +3,17 @@ import { useParams, useNavigate } from 'react-router-dom';
 import GlassContainer from '../components/GlassContainer';
 import CenteredLoader from '../components/CenteredLoader';
 import { CheckCircle, XCircle, Clock, Award, BookOpen, ArrowLeft, ArrowRight } from 'lucide-react';
+import { useSelector } from 'react-redux';
+import { selectUser } from '../store/authSlice';
+import { processTestResult, dispatchKarmaChange } from '../utils/karmaManager';
+import { toast } from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 
 const QuizPage = () => {
   const { subject, topic } = useParams();
   const navigate = useNavigate();
+  const user = useSelector(selectUser);
+  const { t, i18n } = useTranslation();
   
   const [quiz, setQuiz] = useState(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -37,6 +44,12 @@ const QuizPage = () => {
       setIsLoading(true);
       setError(null);
       
+      // Get current language (map i18n language to backend format; handle ar-* locales)
+      const currentLanguage =
+        i18n.language && i18n.language.toLowerCase().startsWith("ar")
+          ? "arabic"
+          : "english";
+      
       const response = await fetch('http://localhost:8005/quiz/generate', {
         method: 'POST',
         headers: {
@@ -45,9 +58,10 @@ const QuizPage = () => {
         body: JSON.stringify({
           subject: subject || 'General Knowledge',
           topic: topic || 'Mixed Topics',
-          num_questions: 5,
+          num_questions: 10,
           difficulty: 'medium',
-          question_types: ['multiple_choice', 'true_false']
+          question_types: ['multiple_choice', 'true_false'],
+          language: currentLanguage
         }),
       });
 
@@ -80,6 +94,12 @@ const QuizPage = () => {
     try {
       setIsSubmitting(true);
       
+      // Determine language for submission (match backend expectations)
+      const currentLanguage =
+        i18n.language && i18n.language.toLowerCase().startsWith("ar")
+          ? "arabic"
+          : "english";
+
       const response = await fetch('http://localhost:8005/quiz/submit', {
         method: 'POST',
         headers: {
@@ -88,7 +108,8 @@ const QuizPage = () => {
         body: JSON.stringify({
           quiz_id: quiz.quiz_id,
           user_answers: userAnswers,
-          user_id: 'current_user'
+          user_id: 'current_user',
+          language: currentLanguage
         }),
       });
 
@@ -98,6 +119,30 @@ const QuizPage = () => {
 
       const data = await response.json();
       setResults(data.evaluation);
+      
+      // Process karma based on test result
+      if (data.evaluation?.score_summary?.percentage_score !== undefined) {
+        const effectiveUserId = user?.id || user?.user_id || 'guest-user';
+        const percentageScore = data.evaluation.score_summary.percentage_score;
+        const karmaResult = processTestResult(effectiveUserId, percentageScore);
+        
+        if (karmaResult) {
+          dispatchKarmaChange(karmaResult);
+          
+          // Show toast notification
+          if (karmaResult.change > 0) {
+            toast.success(`+${karmaResult.change} Karma: ${karmaResult.reason}`, {
+              position: "top-right",
+              duration: 3000,
+            });
+          } else {
+            toast.error(`${karmaResult.change} Karma: ${karmaResult.reason}`, {
+              position: "top-right",
+              duration: 3000,
+            });
+          }
+        }
+      }
       
     } catch (error) {
       console.error('Error submitting quiz:', error);
@@ -128,7 +173,7 @@ const QuizPage = () => {
       <GlassContainer>
         <div className="relative" style={{ height: "calc(100vh - 350px)" }}>
           <CenteredLoader />
-          <p className="text-center text-white mt-4">Generating your quiz...</p>
+          <p className="text-center text-white mt-4">{t("Generating your quiz...")}</p>
         </div>
       </GlassContainer>
     );
@@ -139,13 +184,13 @@ const QuizPage = () => {
       <GlassContainer>
         <div className="text-center">
           <XCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-white mb-4">Error</h2>
+          <h2 className="text-2xl font-bold text-white mb-4">{t("Error")}</h2>
           <p className="text-red-400 mb-6">{error}</p>
           <button
             onClick={() => navigate('/subjects')}
             className="px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
           >
-            Back to Subjects
+            {t("Back to Subjects")}
           </button>
         </div>
       </GlassContainer>
@@ -158,25 +203,25 @@ const QuizPage = () => {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
             <Award className="w-20 h-20 text-yellow-400 mx-auto mb-4" />
-            <h2 className="text-3xl font-bold text-white mb-2">Quiz Complete!</h2>
-            <p className="text-gray-300">Here are your results</p>
+            <h2 className="text-3xl font-bold text-white mb-2">{t("Quiz Complete!")}</h2>
+            <p className="text-gray-300">{t("Here are your results")}</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div className="bg-white/10 rounded-lg p-6 text-center">
-              <h3 className="text-lg font-semibold text-white mb-2">Score</h3>
+              <h3 className="text-lg font-semibold text-white mb-2">{t("Score")}</h3>
               <p className="text-3xl font-bold text-orange-400">
                 {results.score_summary.percentage_score}%
               </p>
             </div>
             <div className="bg-white/10 rounded-lg p-6 text-center">
-              <h3 className="text-lg font-semibold text-white mb-2">Grade</h3>
+              <h3 className="text-lg font-semibold text-white mb-2">{t("Grade")}</h3>
               <p className={`text-3xl font-bold ${getGradeColor(results.score_summary.grade)}`}>
                 {results.score_summary.grade}
               </p>
             </div>
             <div className="bg-white/10 rounded-lg p-6 text-center">
-              <h3 className="text-lg font-semibold text-white mb-2">Correct</h3>
+              <h3 className="text-lg font-semibold text-white mb-2">{t("Correct")}</h3>
               <p className="text-3xl font-bold text-green-400">
                 {results.score_summary.correct_answers}/{results.score_summary.total_questions}
               </p>
@@ -184,16 +229,16 @@ const QuizPage = () => {
           </div>
 
           <div className="bg-white/10 rounded-lg p-6 mb-6">
-            <h3 className="text-xl font-bold text-white mb-4">Performance Analysis</h3>
+            <h3 className="text-xl font-bold text-white mb-4">{t("Performance Analysis")}</h3>
             <p className="text-gray-300 mb-4">
-              Overall Performance: <span className="text-orange-400 font-semibold">
+              {t("Overall Performance")}: <span className="text-orange-400 font-semibold">
                 {results.performance_analysis.overall_performance}
               </span>
             </p>
             
             {results.performance_analysis.recommendations.length > 0 && (
               <div>
-                <h4 className="text-lg font-semibold text-white mb-2">Recommendations:</h4>
+                <h4 className="text-lg font-semibold text-white mb-2">{t("Recommendations")}:</h4>
                 <ul className="list-disc list-inside text-gray-300 space-y-1">
                   {results.performance_analysis.recommendations.map((rec, index) => (
                     <li key={index}>{rec}</li>
@@ -209,13 +254,13 @@ const QuizPage = () => {
               className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Subjects
+              {t("Back to Subjects")}
             </button>
             <button
               onClick={() => window.location.reload()}
               className="px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
             >
-              Take Another Quiz
+              {t("Take Another Quiz")}
             </button>
           </div>
         </div>
@@ -227,7 +272,7 @@ const QuizPage = () => {
     return (
       <GlassContainer>
         <div className="text-center">
-          <p className="text-white">No quiz available</p>
+          <p className="text-white">{t("No quiz available")}</p>
         </div>
       </GlassContainer>
     );
@@ -243,7 +288,7 @@ const QuizPage = () => {
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold text-white">{quiz.subject} - {quiz.topic}</h1>
-            <p className="text-gray-300">Question {currentQuestion + 1} of {quiz.questions.length}</p>
+            <p className="text-gray-300">{t("Question")} {currentQuestion + 1} {t("of")} {quiz.questions.length}</p>
           </div>
           <div className="flex items-center space-x-4">
             <div className="flex items-center text-white">
@@ -300,7 +345,7 @@ const QuizPage = () => {
                       : 'border-gray-600 bg-white/5 text-gray-300 hover:border-gray-500 hover:bg-white/10'
                   }`}
                 >
-                  {option ? 'True' : 'False'}
+                  {option ? t('True') : t('False')}
                 </button>
               ))}
             </div>
@@ -315,7 +360,7 @@ const QuizPage = () => {
             className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Previous
+            {t("Previous")}
           </button>
 
           {currentQuestion === quiz.questions.length - 1 ? (
@@ -327,12 +372,12 @@ const QuizPage = () => {
               {isSubmitting ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Submitting...
+                  {t("Submitting...")}
                 </>
               ) : (
                 <>
                   <CheckCircle className="w-4 h-4 mr-2" />
-                  Submit Quiz
+                  {t("Submit Quiz")}
                 </>
               )}
             </button>
@@ -342,7 +387,7 @@ const QuizPage = () => {
               disabled={currentQuestion === quiz.questions.length - 1}
               className="px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
             >
-              Next
+              {t("Next")}
               <ArrowRight className="w-4 h-4 ml-2" />
             </button>
           )}

@@ -1,6 +1,6 @@
 """
 Enhanced LLM Service with multiple providers and fallback support
-Supports: Groq, OpenAI, and local fallback responses
+Supports: Groq, OpenAI, OpenRouter, Local Arabic Model, and local fallback responses
 """
 
 import os
@@ -16,21 +16,54 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Try to import local model service (may fail if dependencies not installed)
+try:
+    from local_model_service import get_local_model
+    LOCAL_MODEL_AVAILABLE = True
+except ImportError as e:
+    LOCAL_MODEL_AVAILABLE = False
+    logger.warning(f"Local model service not available: {e}")
+
+# Try to import YouTube helper
+try:
+    from youtube_helper import append_youtube_links
+    YOUTUBE_HELPER_AVAILABLE = True
+except ImportError as e:
+    YOUTUBE_HELPER_AVAILABLE = False
+    logger.warning(f"YouTube helper not available: {e}")
+
 class LLMService:
     """Enhanced LLM service with multiple providers and fallback"""
     
     def __init__(self):
         self.groq_api_key = os.getenv('GROQ_API_KEY', '').strip("'\"")
         self.openai_api_key = os.getenv('OPENAI_API_KEY', '').strip("'\"")
+        self.openrouter_api_key = os.getenv('OPENROUTER_API_KEY', '').strip("'\"")
         
-        # Provider priority order
-        self.providers = ['groq', 'openai', 'fallback']
+        # Initialize local model (lazy loaded, won't load until first use)
+        self.local_model = None
+        if LOCAL_MODEL_AVAILABLE:
+            try:
+                # Get checkpoint path from environment or use default
+                checkpoint_path = os.getenv('LOCAL_MODEL_CHECKPOINT_PATH', None)
+                self.local_model = get_local_model(checkpoint_path)
+                logger.info("✅ Local Arabic model service initialized (lazy loading)")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to initialize local model: {e}")
+                self.local_model = None
+        
+        # Provider priority order (local model after API providers, before fallback)
+        self.providers = ['openrouter', 'groq', 'openai', 'local', 'fallback']
         
         # Model configurations - Updated for new ngrok endpoint
         self.models = {
+            'openrouter': {
+                'default': 'meta-llama/llama-3.1-8b-instruct:free',
+                'alternatives': ['google/gemma-2-9b-it:free', 'mistralai/mistral-7b-instruct:free']
+            },
             'groq': {
-                'default': 'llama3.1:latest',  # Updated to match available model
-                'alternatives': ['gemma3:4b']  # Updated to match available models
+                'default': 'llama-3.3-70b-versatile',
+                'alternatives': ['llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'llama3-8b-8192']
             },
             'openai': {
                 'default': 'gpt-3.5-turbo',
@@ -39,19 +72,18 @@ class LLMService:
         }
     
     def call_groq_api(self, prompt: str, model: str = None) -> Dict[str, Any]:
-        """Call Groq API with improved error handling - Updated to use new ngrok endpoint"""
-
-        # Use configured endpoint (prefer UNIGURU_API_BASE_URL, fallback to UNIGURU_NGROK_ENDPOINT)
-        base = os.getenv("UNIGURU_API_BASE_URL") or os.getenv("UNIGURU_NGROK_ENDPOINT") or os.getenv("GROQ_API_ENDPOINT")
-        if not base:
-            raise RuntimeError("UNIGURU_API_BASE_URL or UNIGURU_NGROK_ENDPOINT must be set for UniGuru calls")
-        api_url = base.rstrip("/") + "/v1/chat/completions"
-
-        model = model or self.models['groq']['default']
+        """Call Groq API with improved error handling"""
+        
+        if not self.groq_api_key:
+            return {"success": False, "error": "No Groq API key configured"}
+        
+        # Use real Groq API endpoint
+        api_url = "https://api.groq.com/openai/v1/chat/completions"
+        model = model or os.getenv("GROQ_MODEL_NAME", "llama-3.3-70b-versatile")
 
         headers = {
-            "Content-Type": "application/json",
-            "ngrok-skip-browser-warning": "true"  # Skip ngrok browser warning
+            "Authorization": f"Bearer {self.groq_api_key}",
+            "Content-Type": "application/json"
         }
 
         payload = {
@@ -63,12 +95,14 @@ class LLMService:
         }
 
         try:
-            logger.info(f"Calling new ngrok API endpoint with model: {model}")
+            logger.info(f"Calling new ngrok API endpoint: {api_url}")
+            logger.info(f"Model: {model}")
+            logger.info(f"Prompt: {prompt[:100]}...")
             response = requests.post(
                 api_url,
                 headers=headers,
                 json=payload,
-                timeout=60  # Increased timeout for longer content
+                timeout=180  # Increased timeout to 3 minutes for slow ngrok
             )
             
             if response.status_code == 200:
@@ -105,6 +139,56 @@ class LLMService:
         except Exception as e:
             logger.error(f"❌ Groq API unexpected error: {e}")
             return {"success": False, "error": f"Groq API error: {str(e)}"}
+    
+    def call_openrouter_api(self, prompt: str, model: str = None) -> Dict[str, Any]:
+        """Call OpenRouter API - supports free models"""
+        
+        if not self.openrouter_api_key:
+            return {"success": False, "error": "No OpenRouter API key configured"}
+        
+        model = model or self.models['openrouter']['default']
+        
+        headers = {
+            "Authorization": f"Bearer {self.openrouter_api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "http://localhost:5173",
+            "X-Title": "Gurukul Learning Platform"
+        }
+        
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.7,
+            "max_tokens": 1024
+        }
+        
+        try:
+            logger.info(f"Calling OpenRouter API with model: {model}")
+            response = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                content = result['choices'][0]['message']['content'].strip()
+                logger.info("✅ OpenRouter API call successful")
+                return {
+                    "success": True,
+                    "content": content,
+                    "provider": "openrouter",
+                    "model": model
+                }
+            
+            else:
+                logger.error(f"❌ OpenRouter API error: {response.status_code}")
+                return {"success": False, "error": f"OpenRouter API error: {response.status_code}"}
+                
+        except Exception as e:
+            logger.error(f"❌ OpenRouter API error: {e}")
+            return {"success": False, "error": f"OpenRouter API error: {str(e)}"}
     
     def call_openai_api(self, prompt: str, model: str = None) -> Dict[str, Any]:
         """Call OpenAI API as fallback"""
@@ -154,6 +238,60 @@ class LLMService:
             logger.error(f"❌ OpenAI API error: {e}")
             return {"success": False, "error": f"OpenAI API error: {str(e)}"}
     
+    def call_local_model(self, prompt: str) -> Dict[str, Any]:
+        """Call local Arabic model for inference"""
+        
+        if not LOCAL_MODEL_AVAILABLE or self.local_model is None:
+            return {
+                "success": False,
+                "error": "Local model not available (dependencies not installed or initialization failed)"
+            }
+        
+        try:
+            logger.info("🤖 Calling local Arabic model...")
+            logger.info(f"Prompt: {prompt[:100]}...")
+            
+            # Generate response using local model
+            # Optimized parameters for speed while maintaining quality
+            # Match test script performance: 150 tokens, temp 0.7 for faster generation
+            response_text = self.local_model.generate(
+                prompt=prompt,
+                max_new_tokens=200,   # Balanced: faster than 256, more complete than 150
+                temperature=0.5,      # Balanced: faster than 0.3, still accurate
+                top_p=0.9             # Match test script for consistency
+            )
+            
+            # Post-process: Append YouTube links if requested
+            if YOUTUBE_HELPER_AVAILABLE:
+                try:
+                    response_text = append_youtube_links(response_text, prompt)
+                    logger.info("✅ YouTube links appended to response")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to append YouTube links: {e}")
+            
+            logger.info("✅ Local model inference successful")
+            return {
+                "success": True,
+                "content": response_text,
+                "provider": "local",
+                "model": "arabic-llama-3.2-3b"
+            }
+            
+        except RuntimeError as e:
+            logger.error(f"❌ Local model runtime error: {e}")
+            return {
+                "success": False,
+                "error": f"Local model error: {str(e)}"
+            }
+        except Exception as e:
+            logger.error(f"❌ Local model unexpected error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "success": False,
+                "error": f"Local model error: {str(e)}"
+            }
+    
     def get_fallback_response(self, prompt: str) -> Dict[str, Any]:
         """Generate fallback response when APIs are unavailable"""
         
@@ -192,7 +330,7 @@ class LLMService:
         
         Args:
             prompt: User input text
-            preferred_provider: 'groq', 'openai', or None for auto
+            preferred_provider: 'groq', 'openai', 'openrouter', 'local', or None for auto
             
         Returns:
             Generated response text
@@ -201,7 +339,13 @@ class LLMService:
         providers_to_try = [preferred_provider] if preferred_provider else self.providers
         
         for provider in providers_to_try:
-            if provider == 'groq':
+            if provider == 'openrouter':
+                result = self.call_openrouter_api(prompt)
+                if result["success"]:
+                    return result["content"]
+                logger.warning(f"OpenRouter failed: {result.get('error', 'Unknown error')}")
+            
+            elif provider == 'groq':
                 result = self.call_groq_api(prompt)
                 if result["success"]:
                     return result["content"]
@@ -212,6 +356,12 @@ class LLMService:
                 if result["success"]:
                     return result["content"]
                 logger.warning(f"OpenAI failed: {result.get('error', 'Unknown error')}")
+            
+            elif provider == 'local':
+                result = self.call_local_model(prompt)
+                if result["success"]:
+                    return result["content"]
+                logger.warning(f"Local model failed: {result.get('error', 'Unknown error')}")
             
             elif provider == 'fallback':
                 result = self.get_fallback_response(prompt)
@@ -226,6 +376,10 @@ class LLMService:
         test_prompt = "Hello"
         results = {}
         
+        # Test OpenRouter
+        openrouter_result = self.call_openrouter_api(test_prompt)
+        results['openrouter'] = openrouter_result["success"]
+        
         # Test Groq
         groq_result = self.call_groq_api(test_prompt)
         results['groq'] = groq_result["success"]
@@ -233,6 +387,13 @@ class LLMService:
         # Test OpenAI
         openai_result = self.call_openai_api(test_prompt)
         results['openai'] = openai_result["success"]
+        
+        # Test Local Model
+        if LOCAL_MODEL_AVAILABLE and self.local_model is not None:
+            local_result = self.call_local_model(test_prompt)
+            results['local'] = local_result["success"]
+        else:
+            results['local'] = False
         
         # Fallback always works
         results['fallback'] = True

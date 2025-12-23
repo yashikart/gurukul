@@ -9,6 +9,8 @@ services:
       cd Backend
       pip install --upgrade pip
       pip install -r requirements-production.txt
+      # Download Arabic model checkpoint if configured (non-blocking)
+      bash setup_checkpoint.sh || echo "Checkpoint download skipped (not configured or failed)"
     startCommand: |
       cd Backend
       python main.py
@@ -37,6 +39,22 @@ services:
         value: production
       - key: DEBUG
         value: false
+      # Arabic Model Checkpoint Configuration (optional)
+      # Option 1: S3 Storage
+      - key: CHECKPOINT_S3_BUCKET
+        sync: false
+      - key: CHECKPOINT_S3_PREFIX
+        value: checkpoint-100000
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      # Option 2: Direct URL
+      - key: CHECKPOINT_DOWNLOAD_URL
+        sync: false
+      # Checkpoint local path
+      - key: LOCAL_MODEL_CHECKPOINT_PATH
+        value: /opt/render/checkpoints/checkpoint-100000
     healthCheckPath: /health
     
 databases:

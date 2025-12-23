@@ -1,0 +1,20 @@
+✅ NGROK URL UPDATED
+
+Old: https://c7d82cf2656d.ngrok-free.app
+New: https://04abd8d9431c.ngrok-free.app
+
+FILES UPDATED:
+✅ Backend/.env - ALLOWED_ORIGINS + NGROK_URL
+✅ new frontend/.env.local - All VITE_*_API_BASE_URL
+
+NEXT STEPS:
+1. Restart backend services (they need to reload .env)
+2. Restart frontend: cd "new frontend" && npm run dev
+3. Test CORS with new URL
+
+RESTART COMMANDS:
+- Kill services: taskkill /F /PID <pid>
+- Start: START_ALL_WITH_NGROK.bat
+- Or manual: START_CHATBOT.bat, START_TTS.bat
+
+New URL configured everywhere!

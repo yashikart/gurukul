@@ -4,12 +4,14 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { TextPlugin } from "gsap/TextPlugin";
 import { FiBriefcase, FiBook, FiMonitor } from "react-icons/fi";
+import { useTranslation } from "react-i18next";
 import "../styles/about.css";
 
 // Register GSAP plugins
 gsap.registerPlugin(ScrollTrigger, TextPlugin);
 
 export default function About() {
+  const { t } = useTranslation();
   // Main section refs
   const containerRef = useRef(null);
   const contentRef = useRef(null);
@@ -242,14 +244,14 @@ export default function About() {
               color: "transparent",
             }}
           >
-            About Gurukul
+            {t("About Gurukul")}
           </h1>
 
           <h2
             ref={subtitleRef}
             className="text-xl md:text-2xl font-medium mb-6 text-white/80"
           >
-            Where Ancient Wisdom Meets Modern Technology
+            {t("Where Ancient Wisdom Meets Modern Technology")}
           </h2>
 
           <p
@@ -257,10 +259,7 @@ export default function About() {
             className="text-lg md:text-xl font-medium max-w-4xl mx-auto"
             style={{ color: "#FFFFFF" }}
           >
-            Gurukul is a modern educational platform inspired by ancient Indian
-            teaching traditions. Our mission is to blend timeless wisdom with
-            cutting-edge technology to create transformative learning
-            experiences.
+            {t("Gurukul is a modern educational platform inspired by ancient Indian teaching traditions. Our mission is to blend timeless wisdom with cutting-edge technology to create transformative learning experiences.")}
           </p>
         </div>
 
@@ -275,21 +274,15 @@ export default function About() {
               color: "transparent",
             }}
           >
-            Our Philosophy
+            {t("Our Philosophy")}
           </h2>
 
           <div ref={philosophyTextRef}>
             <p className="text-white/90 mb-4">
-              We envision a world where education transcends boundaries, where
-              ancient wisdom and modern technology converge to create immersive,
-              personalized learning experiences that honor the traditional
-              Guru-Shishya relationship.
+              {t("We envision a world where education transcends boundaries, where ancient wisdom and modern technology converge to create immersive, personalized learning experiences that honor the traditional Guru-Shishya relationship.")}
             </p>
             <p className="text-white/90">
-              Our approach is rooted in the belief that true education nurtures
-              not just the intellect, but the whole person. We combine the depth
-              of ancient Indian knowledge systems with the accessibility and
-              interactivity of modern digital platforms.
+              {t("Our approach is rooted in the belief that true education nurtures not just the intellect, but the whole person. We combine the depth of ancient Indian knowledge systems with the accessibility and interactivity of modern digital platforms.")}
             </p>
           </div>
         </div>
@@ -305,7 +298,7 @@ export default function About() {
               color: "transparent",
             }}
           >
-            Our Approach
+            {t("Our Approach")}
           </h2>
 
           <div
@@ -316,11 +309,9 @@ export default function About() {
               <div className="about-card-icon">
                 <FiBook />
               </div>
-              <h3 className="about-card-title text-xl">Ancient Wisdom</h3>
+              <h3 className="about-card-title text-xl">{t("Ancient Wisdom")}</h3>
               <p className="about-card-content">
-                We draw from centuries of Indian philosophical traditions,
-                presenting timeless knowledge in accessible formats for the
-                modern learner.
+                {t("We draw from centuries of Indian philosophical traditions, presenting timeless knowledge in accessible formats for the modern learner.")}
               </p>
             </div>
 
@@ -328,11 +319,9 @@ export default function About() {
               <div className="about-card-icon">
                 <FiBriefcase />
               </div>
-              <h3 className="about-card-title text-xl">AI-Powered Learning</h3>
+              <h3 className="about-card-title text-xl">{t("AI-Powered Learning")}</h3>
               <p className="about-card-content">
-                Our platform uses advanced AI to adapt to your learning style
-                and pace, providing a truly personalized experience that evolves
-                with you.
+                {t("Our platform uses advanced AI to adapt to your learning style and pace, providing a truly personalized experience that evolves with you.")}
               </p>
             </div>
 
@@ -340,11 +329,9 @@ export default function About() {
               <div className="about-card-icon">
                 <FiMonitor />
               </div>
-              <h3 className="about-card-title text-xl">Immersive Technology</h3>
+              <h3 className="about-card-title text-xl">{t("Immersive Technology")}</h3>
               <p className="about-card-content">
-                Through 3D visualization and interactive elements, we create
-                engaging learning environments that inspire curiosity and deep
-                understanding.
+                {t("Through 3D visualization and interactive elements, we create engaging learning environments that inspire curiosity and deep understanding.")}
               </p>
             </div>
           </div>
@@ -356,10 +343,7 @@ export default function About() {
           className="text-center mt-16 mb-8 max-w-3xl mx-auto"
         >
           <p className="text-lg text-white/90 font-medium">
-            Join us on this journey of discovery and growth as we explore the
-            treasures of knowledge together. At Gurukul, we believe that
-            learning is a lifelong journey, and we're here to guide you every
-            step of the way.
+            {t("Join us on this journey of discovery and growth as we explore the treasures of knowledge together. At Gurukul, we believe that learning is a lifelong journey, and we're here to guide you every step of the way.")}
           </p>
         </div>
       </div>

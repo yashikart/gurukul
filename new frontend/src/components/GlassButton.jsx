@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, forwardRef } from "react";
 import gsap from "gsap";
 import { useGSAP } from "../hooks/useGSAP";
 
@@ -6,13 +6,13 @@ import { useGSAP } from "../hooks/useGSAP";
  * GlassButton - Modern glassmorphic button with GSAP animations
  * Props: icon, children, className, variant, ...props
  */
-export default function GlassButton({
+const GlassButton = forwardRef(function GlassButton({
   icon: Icon,
   children,
   className = "",
   variant = "default", // default, primary, accent
   ...props
-}) {
+}, ref) {
   // Refs for GSAP animations
   const buttonRef = useRef(null);
   const iconRef = useRef(null);
@@ -196,7 +196,7 @@ export default function GlassButton({
 
   return (
     <button
-      ref={buttonRef}
+      ref={ref || buttonRef}
       className={`
         flex items-center justify-center gap-2 rounded-xl
         px-6 py-3 font-semibold
@@ -212,8 +212,10 @@ export default function GlassButton({
       onClick={handleClick}
       {...restProps}
     >
-      {Icon && <Icon ref={iconRef} className="w-5 h-5" />}
+      {Icon && <Icon className="w-5 h-5" />}
       <span ref={textRef}>{children}</span>
     </button>
   );
-}
+});
+
+export default GlassButton;

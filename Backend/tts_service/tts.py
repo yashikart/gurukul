@@ -20,24 +20,28 @@ load_shared_config("tts_service")
 from utils.logging_config import configure_logging
 logger = configure_logging("tts_service")
 
+# Import centralized CORS helper
+from common.cors import configure_cors
+
 app = FastAPI(title="Gurukul TTS Service", description="Text-to-Speech service for lesson content")
 
-# Add CORS middleware (tightened via ALLOWED_ORIGINS)
-_allowed = os.getenv("ALLOWED_ORIGINS", "").strip()
-_allowed_list = [o.strip() for o in _allowed.split(",") if o.strip()] or [
-    "http://localhost",
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://localhost:5174",
-]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_allowed_list,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
+# Configure CORS using centralized helper
+configure_cors(app)
+
+# Generic OPTIONS handler for preflight requests
+from fastapi import Response
+
+@app.options("/{path:path}")
+async def preflight(path: str):
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": os.getenv("NGROK_URL", "*"),
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+            "Access-Control-Allow-Headers": "*"
+        }
+    )
 
 # Global exception handler for consistent errors
 from uuid import uuid4

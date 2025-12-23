@@ -1,0 +1,31 @@
+{
+  "status": "success",
+  "user_id": "usr_67890fghij",
+  "loka": "Naraka Loka (Realm of Punishment)",
+  "description": "Assigned to Naraka Loka due to negative net karma and incomplete PaapTokens",
+  "carryover": {
+    "net_karma": -45,
+    "merit_carryover": 15,
+    "role_carryover": "citizen"
+  },
+  "paap_tokens_status": {
+    "minor": 3,
+    "medium": 1,
+    "maha": 0,
+    "total": 4,
+    "status": "pursuing"
+  },
+  "final_balances": {
+    "PunyaTokens": 25,
+    "SevaPoints": 10,
+    "PaapTokens": {
+      "minor": 3,
+      "medium": 1,
+      "maha": 0
+    }
+  },
+  "merit_score": 35,
+  "role": "citizen",
+  "rebirth_count": 0,
+  "timestamp": "2023-10-15T18:45:30Z"
+}

@@ -44,7 +44,7 @@ start_frontend.bat
 - **Tailwind CSS** - Styling
 - **Redux Toolkit** - State management
 - **React Router** - Navigation
-- **Supabase** - Authentication
+- **Supabase** - Authentication and data storage
 
 ## Project Structure
 
@@ -69,12 +69,12 @@ src/
 
 ## Environment Variables
 
-Create a `.env` file:
+Create a `.env` file with your Supabase credentials:
 
 ```env
+VITE_SUPABASE_URL=https://aczmbrhfzankcvpbjavt.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjem1icmhmemFua2N2cGJqYXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1Njg1MDIsImV4cCI6MjA4MDE0NDUwMn0.PsCxt3xyBGlh6BskcqDH5ojPLDjWRLMwgNYW-8eKBys
 VITE_API_BASE_URL=http://localhost:8000
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_key
 ```
 
 ## Integration with Backend
@@ -126,3 +126,11 @@ CMD ["npm", "run", "preview"]
 - GSAP for animations
 - React Query for data fetching
 - Supabase for authentication and data storage
+
+## Supabase Setup
+
+This project now uses Supabase for authentication and data storage. See [SUPABASE_SETUP.md](SUPABASE_SETUP.md) for detailed setup instructions.
+
+The project is configured to use the following Supabase project:
+- **Project URL**: https://aczmbrhfzankcvpbjavt.supabase.co
+- **Anonymous Key**: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjem1icmhmemFua2N2cGJqYXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1Njg1MDIsImV4cCI6MjA4MDE0NDUwMn0.PsCxt3xyBGlh6BskcqDH5ojPLDjWRLMwgNYW-8eKBys

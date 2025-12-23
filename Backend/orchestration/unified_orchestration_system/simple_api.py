@@ -6,8 +6,11 @@ Each endpoint has both GET and POST methods for frontend integration
 import os
 import uuid
 import logging
+import time
+import requests
+import re
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pathlib import Path
 
 # FastAPI imports
@@ -52,6 +55,46 @@ except ImportError as e:
     logger.warning(f"Advanced forecasting not available: {e}")
     logger.info("Install required packages: pip install prophet statsmodels scikit-learn")
 
+def ensure_complete_text(text: str, max_length: int = 2000) -> str:
+    """
+    Ensures the text ends at a complete sentence and is within max_length.
+    If truncated, it tries to find the last complete sentence.
+    """
+    if not text:
+        return ""
+
+    # If text is already within max_length and ends with punctuation, return as is
+    if len(text) <= max_length and re.search(r'[.!?:]\s*$', text):
+        return text.strip()
+
+    # Truncate to max_length if necessary
+    if len(text) > max_length:
+        text = text[:max_length]
+
+    # Find the last sentence-ending punctuation
+    sentence_enders = re.compile(r'[.!?:]')
+    matches = list(sentence_enders.finditer(text))
+
+    if matches:
+        # Find the last match that is not too close to the end (to avoid cutting off mid-word)
+        last_match = None
+        for match in reversed(matches):
+            # Ensure there's at least one character after the punctuation or it's the very end
+            if match.end() <= len(text) or (match.end() + 1) >= len(text):
+                last_match = match
+                break
+        
+        if last_match:
+            return text[:last_match.end()].strip()
+    
+    # If no sentence ender found or it's too short, try to cut at last word boundary
+    last_space = text.rfind(' ')
+    if last_space != -1 and last_space > len(text) * 0.7:  # Avoid cutting off too much
+        return text[:last_space].strip() + "..."
+    
+    # Fallback: just return the truncated text with ellipsis
+    return text.strip() + "..."
+
 class SimpleOrchestrationEngine:
     """Simple orchestration engine for the three main endpoints"""
     
@@ -81,7 +124,9 @@ class SimpleOrchestrationEngine:
 
     def initialize_gemini(self):
         """Initialize Gemini API with failover"""
-        primary_key = os.getenv("GEMINI_API_KEY")
+        # Default Google AI Studio API key
+        default_gemini_key = "AIzaSyDSunIIg6InYPa4yaYhrXKGXO2HTWhi_wc"
+        primary_key = os.getenv("GEMINI_API_KEY", default_gemini_key)
         backup_key = os.getenv("GEMINI_API_KEY_BACKUP")
         
         # Try primary key
@@ -232,8 +277,11 @@ class SimpleOrchestrationEngine:
             try:
                 result = self.ollama_client.generate_wellness_response(prompt)
                 if result.get('success') and result.get('response'):
+                    response_text = result['response']
+                    # Ensure complete text
+                    response_text = ensure_complete_text(response_text, max_length=2000)
                     logger.info(f"✅ Response generated using Ollama ({result.get('response_time', 0)}s)")
-                    return result['response']
+                    return response_text
                 else:
                     logger.warning("⚠️  Ollama failed to generate response")
             except Exception as e:
@@ -253,36 +301,57 @@ class SimpleOrchestrationEngine:
         logger.warning("⚠️  Both Ollama and Gemini failed, using hardcoded fallback")
         return fallback
 
-    def generate_wellness_response(self, query: str, user_context: Optional[Dict[str, Any]] = None, fallback: str = "") -> str:
+    def generate_wellness_response(self, query: str, user_context: Optional[Dict[str, Any]] = None, fallback: str = "", language: str = "english") -> str:
         """Generate wellness response with user context using Ollama (primary) and Gemini (fallback)"""
 
         # Try Ollama first with user context
         if self.ollama_client:
             try:
-                result = self.ollama_client.generate_wellness_response(query, user_context)
+                result = self.ollama_client.generate_wellness_response(query, user_context, language)
                 if result.get('success') and result.get('response'):
+                    response_text = result['response']
+                    # Ensure complete text
+                    response_text = ensure_complete_text(response_text, max_length=2000)
                     logger.info(f"✅ Wellness response generated using Ollama ({result.get('response_time', 0)}s)")
-                    return result['response']
+                    return response_text
                 else:
                     logger.warning("⚠️  Ollama failed to generate wellness response")
             except Exception as e:
                 logger.warning(f"Ollama wellness error: {e}")
+
+        # Add language instruction if Arabic is selected
+        language_instruction = ""
+        if language.lower() == "arabic":
+            language_instruction = "\n\nLANGUAGE REQUIREMENT: Generate the ENTIRE response in Arabic (العربية). All content must be in Arabic using proper Arabic script and formatting."
 
         # Fallback to Gemini with basic prompt
         if self.gemini_model:
             try:
                 prompt = f"""You are a compassionate wellness counselor. Provide caring, helpful advice for: "{query}"
 
+IMPORTANT CONSTRAINTS:
+- Generate a concise but COMPLETE response within approximately 1500-2000 characters.
+- Prioritize completeness and clarity over length.
+- Ensure your response feels complete and doesn't end abruptly.
+- Cover essential points clearly and concisely.
+- Make every word count.
+{language_instruction}
+
 Provide supportive guidance that:
 - Shows empathy and understanding
 - Offers practical, actionable advice
 - Promotes overall wellbeing
-- Is encouraging and positive"""
+- Is encouraging and positive
+
+CRITICAL: Your response must be complete and feel finished. Do not cut off mid-sentence or mid-thought. If you need to be concise, prioritize covering all essential points briefly rather than covering fewer points in detail."""
 
                 response = self.gemini_model.generate_content(prompt)
                 if response and response.text:
+                    response_text = response.text.strip()
+                    # Ensure complete text
+                    response_text = ensure_complete_text(response_text, max_length=2000)
                     logger.info("✅ Wellness response generated using Gemini (fallback)")
-                    return response.text.strip()
+                    return response_text
             except Exception as e:
                 logger.warning(f"Gemini wellness error: {e}")
 
@@ -291,7 +360,230 @@ Provide supportive guidance that:
             fallback = f"Thank you for reaching out about '{query}'. It's important to take care of your wellbeing. Here are some gentle suggestions: Take time for self-care, practice deep breathing, stay connected with supportive people, and remember that small steps can lead to big improvements. If you're experiencing serious concerns, please consider speaking with a healthcare professional."
 
         logger.warning("⚠️  Both Ollama and Gemini failed for wellness, using hardcoded fallback")
-        return fallback
+        # Ensure fallback is also complete
+        return ensure_complete_text(fallback, max_length=2000)
+
+    def generate_financial_response(self, query: str, user_context: Optional[Dict[str, Any]] = None, fallback: str = "", language: str = "english") -> str:
+        """Generate financial response with user context using Groq (primary), Ollama (secondary), and Gemini (fallback)"""
+
+        # Build financial context prompt
+        financial_context = ""
+        if user_context:
+            if user_context.get('name'):
+                financial_context += f"\nName: {user_context['name']}"
+            if user_context.get('monthly_income'):
+                monthly_income = float(user_context['monthly_income'])
+                financial_context += f"\nMonthly Income: ₹{monthly_income:,.2f}"
+            
+            # Handle expenses - can be list of dicts or list of ExpenseItem objects
+            if user_context.get('expenses'):
+                expenses = user_context['expenses']
+                total_expenses = 0
+                expense_details = []
+                
+                for exp in expenses:
+                    if isinstance(exp, dict):
+                        amount = float(exp.get('amount', 0))
+                        name = exp.get('name', 'Unknown')
+                    elif hasattr(exp, 'amount') and hasattr(exp, 'name'):
+                        amount = float(exp.amount)
+                        name = exp.name
+                    else:
+                        continue
+                    
+                    total_expenses += amount
+                    if name and amount > 0:
+                        expense_details.append(f"{name}: ₹{amount:,.2f}")
+                
+                financial_context += f"\nTotal Monthly Expenses: ₹{total_expenses:,.2f}"
+                if expense_details:
+                    financial_context += f"\nExpense Breakdown: {', '.join(expense_details)}"
+                
+                if user_context.get('monthly_income'):
+                    monthly_income = float(user_context['monthly_income'])
+                    monthly_savings = monthly_income - total_expenses
+                    savings_rate = (monthly_savings / monthly_income * 100) if monthly_income > 0 else 0
+                    financial_context += f"\nMonthly Savings: ₹{monthly_savings:,.2f} ({savings_rate:.1f}% savings rate)"
+            
+            if user_context.get('financial_goal'):
+                financial_context += f"\nFinancial Goal: {user_context['financial_goal']}"
+            if user_context.get('financial_type'):
+                financial_context += f"\nInvestment Style: {user_context['financial_type']}"
+            if user_context.get('risk_level'):
+                financial_context += f"\nRisk Tolerance: {user_context['risk_level']}"
+
+        # Add language instruction if Arabic is selected
+        language_instruction = ""
+        if language.lower() == "arabic":
+            language_instruction = "\n\nLANGUAGE REQUIREMENT: Generate the ENTIRE response in Arabic (العربية). All content must be in Arabic using proper Arabic script and formatting."
+
+        # Try Groq API first (for Grok/Llama models via Groq)
+        groq_api_key = os.getenv('GROQ_API_KEY', '').strip().strip('"').strip("'")
+        if groq_api_key:
+            try:
+                financial_prompt = f"""You are a professional financial advisor with expertise in personal finance, investments, budgeting, and financial planning. Provide helpful, supportive financial guidance.{financial_context}
+
+User's Question: "{query}"
+
+IMPORTANT CONSTRAINTS:
+- Generate a concise but COMPLETE response within approximately 1500-2000 characters.
+- Prioritize completeness and clarity over length.
+- Ensure your response feels complete and doesn't end abruptly.
+- Cover essential points clearly and concisely.
+- Make every word count.
+{language_instruction}
+
+Please provide financial advice that:
+- Is empathetic and understanding of their financial situation
+- Offers practical, actionable financial strategies and recommendations
+- Helps them achieve their stated financial goals
+- Is encouraging and supportive
+- Considers their financial profile (income, expenses, savings, goals, risk tolerance)
+- Provides specific, personalized recommendations based on their situation
+- Uses clear, easy-to-understand language
+- Includes actionable steps they can take
+
+CRITICAL: Your response must be complete and feel finished. Do not cut off mid-sentence or mid-thought. If you need to be concise, prioritize covering all essential points briefly rather than covering fewer points in detail.
+
+Provide a comprehensive response that addresses their question while considering their complete financial context."""
+
+                api_url = "https://api.groq.com/openai/v1/chat/completions"
+                headers = {
+                    "Authorization": f"Bearer {groq_api_key}",
+                    "Content-Type": "application/json"
+                }
+                
+                # Try Llama models via Groq (primary: llama-3.3-70b, fallback: llama-3.1-70b)
+                models_to_try = ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama-3.1-8b-instant"]
+                
+                for model_name in models_to_try:
+                    try:
+                        payload = {
+                            "model": model_name,
+                            "messages": [{"role": "user", "content": financial_prompt}],
+                            "temperature": 0.7,
+                            "max_tokens": 2048,
+                            "top_p": 0.9
+                        }
+                        
+                        start_time = time.time()
+                        response = requests.post(api_url, headers=headers, json=payload, timeout=30)
+                        response_time = time.time() - start_time
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            message = data.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+                            if message:
+                                # Ensure complete text
+                                message = ensure_complete_text(message, max_length=2000)
+                                logger.info(f"✅ Financial response generated using Groq ({model_name}) ({response_time:.2f}s)")
+                                return message
+                        else:
+                            logger.warning(f"⚠️  Groq API error with {model_name}: HTTP {response.status_code}")
+                    except Exception as e:
+                        logger.warning(f"⚠️  Groq API error with {model_name}: {e}")
+                        continue
+                        
+                logger.warning("⚠️  All Groq models failed, trying Ollama...")
+            except Exception as e:
+                logger.warning(f"⚠️  Groq API error: {e}")
+
+        # Try Ollama as secondary option (using direct prompt method for financial advice)
+        if self.ollama_client:
+            try:
+                # Create a comprehensive prompt for financial advice
+                financial_prompt = f"""You are a professional financial advisor with expertise in personal finance, investments, budgeting, and financial planning. Provide helpful, supportive financial guidance.{financial_context}
+
+User's Question: "{query}"
+
+IMPORTANT CONSTRAINTS:
+- Generate a concise but COMPLETE response within approximately 1500-2000 characters.
+- Prioritize completeness and clarity over length.
+- Ensure your response feels complete and doesn't end abruptly.
+- Cover essential points clearly and concisely.
+- Make every word count.
+{language_instruction}
+
+Please provide financial advice that:
+- Is empathetic and understanding of their financial situation
+- Offers practical, actionable financial strategies and recommendations
+- Helps them achieve their stated financial goals
+- Is encouraging and supportive
+- Considers their financial profile (income, expenses, savings, goals, risk tolerance)
+- Provides specific, personalized recommendations based on their situation
+- Uses clear, easy-to-understand language
+- Includes actionable steps they can take
+
+CRITICAL: Your response must be complete and feel finished. Do not cut off mid-sentence or mid-thought. If you need to be concise, prioritize covering all essential points briefly rather than covering fewer points in detail.
+
+Provide a comprehensive response that addresses their question while considering their complete financial context."""
+
+                # Use the Ollama client's internal method to generate response directly
+                if hasattr(self.ollama_client, '_make_ollama_request'):
+                    start_time = time.time()
+                    response = self.ollama_client._make_ollama_request(financial_prompt)
+                    response_time = time.time() - start_time
+                    
+                    if response and response.strip():
+                        response_text = response.strip()
+                        # Ensure complete text
+                        response_text = ensure_complete_text(response_text, max_length=2000)
+                        logger.info(f"✅ Financial response generated using Ollama ({response_time:.2f}s)")
+                        return response_text
+                else:
+                    # Fallback: use the wellness method with financial prompt (it just sends the prompt to Ollama)
+                    result = self.ollama_client.generate_wellness_response(financial_prompt, user_context)
+                    if result.get('success') and result.get('response'):
+                        response_text = result['response']
+                        # Ensure complete text
+                        response_text = ensure_complete_text(response_text, max_length=2000)
+                        logger.info(f"✅ Financial response generated using Ollama ({result.get('response_time', 0)}s)")
+                        return response_text
+                    
+                logger.warning("⚠️  Ollama failed to generate financial response")
+            except Exception as e:
+                logger.warning(f"Ollama financial error: {e}")
+
+        # Fallback to Gemini with financial prompt
+        if self.gemini_model:
+            try:
+                prompt = f"""You are a professional financial advisor. Provide helpful, supportive financial guidance for: "{query}"{financial_context}
+
+IMPORTANT CONSTRAINTS:
+- Generate a concise but COMPLETE response within approximately 1500-2000 characters.
+- Prioritize completeness and clarity over length.
+- Ensure your response feels complete and doesn't end abruptly.
+- Cover essential points clearly and concisely.
+- Make every word count.
+{language_instruction}
+
+Provide financial advice that:
+- Is empathetic and understanding
+- Offers practical, actionable financial strategies
+- Helps achieve financial goals
+- Is encouraging and supportive
+- Considers the user's financial profile and risk tolerance
+- Provides specific recommendations based on their situation
+
+CRITICAL: Your response must be complete and feel finished. Do not cut off mid-sentence or mid-thought. If you need to be concise, prioritize covering all essential points briefly rather than covering fewer points in detail."""
+
+                response = self.gemini_model.generate_content(prompt)
+                if response and response.text:
+                    response_text = response.text.strip()
+                    # Ensure complete text
+                    response_text = ensure_complete_text(response_text, max_length=2000)
+                    logger.info("✅ Financial response generated using Gemini (fallback)")
+                    return response_text
+            except Exception as e:
+                logger.warning(f"Gemini financial error: {e}")
+
+        # Final fallback
+        if not fallback:
+            fallback = f"Thank you for your financial question about '{query}'. Based on your financial profile, here are some helpful suggestions: Review your monthly budget regularly, prioritize saving for your financial goals, consider diversifying your investments based on your risk tolerance, and remember that small consistent steps lead to significant financial progress. If you need more specific advice, please provide more details about your financial situation."
+
+        logger.warning("⚠️  Both Ollama and Gemini failed for financial, using hardcoded fallback")
+        # Ensure fallback is also complete
+        return ensure_complete_text(fallback, max_length=2000)
     
     def search_documents(self, query: str, store_type: str = "unified") -> list:
         """Search relevant documents from vector store"""
@@ -311,12 +603,30 @@ engine = SimpleOrchestrationEngine()
 class QueryRequest(BaseModel):
     query: str
     user_id: Optional[str] = "anonymous"
+    language: Optional[str] = "english"
 
 class WellnessRequest(BaseModel):
     query: str
     user_id: Optional[str] = "anonymous"
     mood_score: Optional[float] = None
     stress_level: Optional[float] = None
+    language: Optional[str] = "english"
+
+class ExpenseItem(BaseModel):
+    """Expense item with name and amount"""
+    name: str
+    amount: float
+
+class FinancialRequest(BaseModel):
+    query: str
+    user_id: Optional[str] = "anonymous"
+    name: Optional[str] = None
+    monthly_income: Optional[float] = None
+    expenses: Optional[List[ExpenseItem]] = None
+    financial_goal: Optional[str] = None
+    financial_type: Optional[str] = "Conservative"
+    risk_level: Optional[str] = "Low"
+    language: Optional[str] = "english"
 
 class SimpleResponse(BaseModel):
     query_id: str
@@ -408,17 +718,19 @@ Provide spiritual wisdom that is authentic, practical, and inspiring. Keep it co
 @app.get("/edumentor")
 async def edumentor_get(
     query: str = Query(..., description="Your learning question"),
-    user_id: str = Query("anonymous", description="User ID")
+    user_id: str = Query("anonymous", description="User ID"),
+    language: str = Query("english", description="Language for response (english, arabic)")
 ):
     """GET method for educational content"""
-    return await process_edumentor_query(query, user_id)
+    return await process_edumentor_query(query, user_id, language)
 
 @app.post("/edumentor")
 async def edumentor_post(request: QueryRequest):
     """POST method for educational content"""
-    return await process_edumentor_query(request.query, request.user_id)
+    language = getattr(request, 'language', 'english')
+    return await process_edumentor_query(request.query, request.user_id, language)
 
-async def process_edumentor_query(query: str, user_id: str):
+async def process_edumentor_query(query: str, user_id: str, language: str = "english"):
     """Process educational query and return learning content"""
     try:
         # Search relevant documents from multiple stores for comprehensive results
@@ -441,21 +753,37 @@ async def process_edumentor_query(query: str, user_id: str):
         sources = all_sources[:3]  # Take top 3 sources
         context = "\n".join([doc["text"] for doc in sources])
         
-        # Generate response
+        # Generate response with language instruction
+        language_instruction = ""
+        if language.lower() == "arabic":
+            language_instruction = "\n\nLANGUAGE REQUIREMENT: Generate the ENTIRE response in Arabic (العربية). All content must be in Arabic using proper Arabic script and formatting."
+        
         prompt = f"""You are an expert educator. Explain this topic clearly and engagingly: "{query}"
 
 Educational context:
 {context}
 
+IMPORTANT CONSTRAINTS:
+- Generate a concise but COMPLETE explanation within approximately 1500-2000 characters.
+- Prioritize completeness and clarity over length.
+- Ensure your explanation feels complete and doesn't end abruptly.
+- Cover essential concepts clearly and concisely.
+- Make every word count.
+{language_instruction}
+
 Provide a clear, comprehensive explanation that:
 - Uses simple, understandable language
 - Includes practical examples
 - Makes the topic interesting and memorable
-- Is suitable for students"""
+- Is suitable for students
+
+CRITICAL: Your explanation must be complete and feel finished. Do not cut off mid-sentence or mid-thought. If you need to be concise, prioritize covering all essential points briefly rather than covering fewer points in detail."""
 
         fallback = f"Great question about '{query}'! This is an important topic to understand. Let me break it down for you in simple terms with practical examples that will help you learn and remember the key concepts. The main idea is to understand the fundamental principles and how they apply in real-world situations."
         
         response_text = engine.generate_response(prompt, fallback)
+        # Ensure complete text
+        response_text = ensure_complete_text(response_text, max_length=2000)
         
         return SimpleResponse(
             query_id=str(uuid.uuid4()),
@@ -475,10 +803,11 @@ Provide a clear, comprehensive explanation that:
 @app.get("/wellness")
 async def wellness_get(
     query: str = Query(..., description="Your wellness concern"),
-    user_id: str = Query("anonymous", description="User ID")
+    user_id: str = Query("anonymous", description="User ID"),
+    language: str = Query("english", description="Language for response (english, arabic)")
 ):
     """GET method for wellness advice"""
-    return await process_wellness_query(query, user_id, {})
+    return await process_wellness_query(query, user_id, {}, language)
 
 @app.post("/wellness")
 async def wellness_post(request: WellnessRequest):
@@ -491,16 +820,17 @@ async def wellness_post(request: WellnessRequest):
     if request.user_id:
         user_context['user_id'] = request.user_id
 
-    return await process_wellness_query(request.query, request.user_id, user_context)
+    language = request.language or "english"
+    return await process_wellness_query(request.query, request.user_id, user_context, language)
 
-async def process_wellness_query(query: str, user_id: str, user_context: Optional[Dict[str, Any]] = None):
+async def process_wellness_query(query: str, user_id: str, user_context: Optional[Dict[str, Any]] = None, language: str = "english"):
     """Process wellness query and return health advice"""
     try:
         # Search relevant documents
         sources = engine.search_documents(query, "wellness")
 
-        # Use the new wellness-specific method with user context
-        response_text = engine.generate_wellness_response(query, user_context)
+        # Use the new wellness-specific method with user context and language
+        response_text = engine.generate_wellness_response(query, user_context, language=language)
         
         return SimpleResponse(
             query_id=str(uuid.uuid4()),
@@ -548,6 +878,119 @@ async def ask_wellness_post(request: WellnessRequest):
     except Exception as e:
         logger.error(f"Error in ask-wellness: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== FINANCIAL ENDPOINTS ====================
+
+@app.get("/financial")
+async def financial_get(
+    query: str = Query(..., description="Your financial concern"),
+    user_id: str = Query("anonymous", description="User ID"),
+    name: Optional[str] = Query(None, description="Your name"),
+    monthly_income: Optional[float] = Query(None, description="Monthly income in currency units"),
+    financial_goal: Optional[str] = Query(None, description="Financial goal description"),
+    financial_type: Optional[str] = Query("Conservative", description="Investment style: Conservative, Moderate, Aggressive"),
+    risk_level: Optional[str] = Query("Low", description="Risk tolerance: Low, Medium, High"),
+    expenses: Optional[str] = Query(None, description="Expenses as JSON string: [{'name': 'Expense Name', 'amount': 1000}]"),
+    language: str = Query("english", description="Language for response (english, arabic)")
+):
+    """
+    GET method for financial advice using Llama/Grok models
+    
+    Provides personalized financial advice based on your query and optional profile information.
+    Uses Groq API (Llama models) as primary, with Ollama and Gemini as fallbacks.
+    """
+    user_context = {}
+    if name:
+        user_context['name'] = name
+    if monthly_income:
+        user_context['monthly_income'] = monthly_income
+    if financial_goal:
+        user_context['financial_goal'] = financial_goal
+    if financial_type:
+        user_context['financial_type'] = financial_type
+    if risk_level:
+        user_context['risk_level'] = risk_level
+    if expenses:
+        try:
+            import json
+            user_context['expenses'] = json.loads(expenses)
+        except:
+            logger.warning(f"Failed to parse expenses JSON: {expenses}")
+    
+    return await process_financial_query(query, user_id, user_context, language)
+
+@app.post("/financial")
+async def financial_post(request: FinancialRequest):
+    """POST method for financial advice with financial profile"""
+    user_context = {}
+    if request.name:
+        user_context['name'] = request.name
+    if request.monthly_income:
+        user_context['monthly_income'] = request.monthly_income
+    if request.expenses:
+        # Convert ExpenseItem objects to dictionaries for processing
+        expense_list = []
+        for exp in request.expenses:
+            if isinstance(exp, dict):
+                expense_list.append(exp)
+            elif hasattr(exp, 'name') and hasattr(exp, 'amount'):
+                expense_list.append({"name": exp.name, "amount": exp.amount})
+            else:
+                expense_list.append(exp)
+        user_context['expenses'] = expense_list
+    if request.financial_goal:
+        user_context['financial_goal'] = request.financial_goal
+    if request.financial_type:
+        user_context['financial_type'] = request.financial_type
+    if request.risk_level:
+        user_context['risk_level'] = request.risk_level
+    if request.user_id:
+        user_context['user_id'] = request.user_id
+
+    language = request.language or "english"
+    return await process_financial_query(request.query, request.user_id, user_context, language)
+
+async def process_financial_query(query: str, user_id: str, user_context: Optional[Dict[str, Any]] = None, language: str = "english"):
+    """Process financial query and return financial advice"""
+    try:
+        # Search relevant documents
+        sources = engine.search_documents(query, "wellness")  # Use wellness store for now, can add financial store later
+
+        # Use the new financial-specific method with user context and language
+        logger.info(f"Processing financial query: {query[:100]}...")
+        logger.info(f"User context: {user_context}, language: {language}")
+        response_text = engine.generate_financial_response(query, user_context, language=language)
+        
+        if not response_text or not response_text.strip():
+            logger.error("Empty response from generate_financial_response")
+            response_text = "I apologize, but I couldn't generate a proper response. Please try again or provide more details about your financial question."
+        
+        logger.info(f"Financial response generated successfully ({len(response_text)} chars)")
+        
+        return SimpleResponse(
+            query_id=str(uuid.uuid4()),
+            query=query,
+            response=response_text,
+            sources=sources,
+            timestamp=datetime.now().isoformat(),
+            endpoint="financial"
+        )
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        logger.error(f"Error in process_financial_query: {e}", exc_info=True)
+        # Return a proper error response instead of raising
+        error_response = "I apologize, but I encountered an error processing your financial query. Please try again or check your connection."
+        return SimpleResponse(
+            query_id=str(uuid.uuid4()),
+            query=query,
+            response=error_response,
+            sources=[],
+            timestamp=datetime.now().isoformat(),
+            endpoint="financial"
+        )
 
 # ==================== ROOT ENDPOINT ====================
 

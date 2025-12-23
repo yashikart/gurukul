@@ -1,0 +1,39 @@
+{
+  "status": "success",
+  "user_id": "usr_67890fghij",
+  "role": "citizen",
+  "merit_score": 65,
+  "paap_score": 12,
+  "net_karma": 53,
+  "balances": {
+    "PunyaTokens": 25,
+    "SevaPoints": 15,
+    "PaapTokens": {
+      "minor": 8,
+      "medium": 3,
+      "maha": 1
+    }
+  },
+  "action_stats": {
+    "total_actions": 47,
+    "pending_atonements": 2,
+    "completed_atonements": 5
+  },
+  "token_attributes": {
+    "PunyaTokens": {
+      "description": "Merit tokens earned through virtuous actions",
+      "weight": 1.0,
+      "decay_rate": 0.001
+    },
+    "SevaPoints": {
+      "description": "Service points for community contributions",
+      "weight": 0.8,
+      "decay_rate": 0.002
+    },
+    "PaapTokens": {
+      "description": "Sin tokens requiring atonement",
+      "weight": -0.5,
+      "decay_rate": 0.0005
+    }
+  }
+}

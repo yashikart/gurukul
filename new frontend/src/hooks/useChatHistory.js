@@ -9,7 +9,7 @@ import { toast } from 'react-hot-toast';
 import chatHistoryStorage, { DEFAULT_WELCOME_MESSAGE } from '../utils/chatHistoryStorage';
 import chatErrorRecovery from '../utils/chatErrorRecovery';
 import chatPerformanceOptimizer from '../utils/chatPerformanceOptimizer';
-import { useUser } from '@clerk/clerk-react';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * Main hook for managing chat history
@@ -233,7 +233,8 @@ export const useChatHistory = () => {
 
 
   // Initialize on mount and when userId changes
-  const { isSignedIn, user } = useUser();
+  const { user } = useAuth();
+  const isSignedIn = !!user;
 
   useEffect(() => {
     const currentUserId = isSignedIn && user ? user.id : 'guest-user';

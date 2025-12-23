@@ -1,0 +1,29 @@
+{
+  "status": "success",
+  "message": "Atonement proof validated successfully",
+  "plan": {
+    "plan_id": "plan_12345abcde",
+    "user_id": "usr_67890fghij",
+    "action": "lie",
+    "severity": "minor",
+    "tasks": [
+      {
+        "type": "apology",
+        "description": "Sincerely apologize to those affected by the lie",
+        "target_amount": 1,
+        "completed_amount": 1,
+        "status": "completed"
+      },
+      {
+        "type": "community_service",
+        "description": "Complete 2 hours of community service",
+        "target_amount": 2,
+        "completed_amount": 2,
+        "status": "completed"
+      }
+    ],
+    "status": "completed",
+    "created_at": "2023-10-15T16:20:10Z",
+    "completed_at": "2023-10-16T10:45:30Z"
+  }
+}

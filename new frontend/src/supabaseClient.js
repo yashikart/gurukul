@@ -1,9 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { storage } from "./utils/storageUtils";
 
-// Use Vite environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Use the new Supabase credentials
+const supabaseUrl = "https://aczmbrhfzankcvpbjavt.supabase.co";
+const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjem1icmhmemFua2N2cGJqYXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1Njg1MDIsImV4cCI6MjA4MDE0NDUwMn0.PsCxt3xyBGlh6BskcqDH5ojPLDjWRLMwgNYW-8eKBys";
 
 // Validate environment variables
 if (!supabaseUrl || !supabaseAnonKey) {
@@ -11,6 +11,34 @@ if (!supabaseUrl || !supabaseAnonKey) {
     "Missing Supabase environment variables. Check your .env file."
   );
 }
+
+// Diagnostic function to test Supabase connectivity
+export const testSupabaseConnection = async () => {
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/`, {
+      method: 'HEAD',
+      headers: {
+        'apikey': supabaseAnonKey,
+      },
+    });
+    return {
+      success: true,
+      status: response.status,
+      message: 'Supabase connection successful',
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+      message: 'Failed to connect to Supabase',
+      details: {
+        url: supabaseUrl,
+        online: navigator.onLine,
+        errorType: error.name,
+      },
+    };
+  }
+};
 
 // Create a custom storage object with error handling
 const customStorage = {
@@ -71,6 +99,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       "Content-Type": "application/json",
       Accept: "application/json",
     },
+    // Let Supabase handle fetch natively - it has built-in retry logic
+    // We'll handle errors in the components instead
   },
   // Add debug option to help with troubleshooting
   debug: import.meta.env.DEV,

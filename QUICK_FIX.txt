@@ -1,0 +1,84 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                         CORS ERROR - QUICK FIX                                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+PROBLEM:
+  CORS error when accessing chatbot through ngrok
+
+ROOT CAUSE:
+  Ngrok is forwarding to PORT 8000 instead of PORT 8001
+
+═══════════════════════════════════════════════════════════════════════════════
+
+QUICK FIX (5 STEPS):
+
+1. STOP NGROK
+   → Close ngrok window OR run: taskkill /F /IM ngrok.exe
+
+2. START NGROK WITH CORRECT PORT
+   → ngrok http 8001 --region=in --host-header=localhost
+   → Copy the new ngrok URL (e.g., https://abc123.ngrok-free.app)
+
+3. UPDATE Backend\.env
+   → Find line: ALLOWED_ORIGINS=...
+   → Replace old ngrok URL with new one
+   → Find line: NGROK_URL=...
+   → Replace with new ngrok URL
+
+4. UPDATE new frontend\.env.local
+   → Find line: VITE_CHAT_API_BASE_URL=...
+   → Replace with new ngrok URL
+   → Find line: VITE_CHATBOT_API_URL=...
+   → Replace with new ngrok URL
+
+5. RESTART CHATBOT SERVICE
+   → cd Backend\dedicated_chatbot_service
+   → python chatbot_api.py
+   → Look for: "🔒 CORS CONFIGURATION" in logs
+
+═══════════════════════════════════════════════════════════════════════════════
+
+VERIFY FIX:
+
+1. Visit ngrok URL in browser (clear warning page)
+2. Run: TEST_CORS_NGROK.bat
+3. Check for "Access-Control-Allow-Origin: http://localhost:5173" in output
+4. Test from frontend: http://localhost:5173/chatbot
+
+═══════════════════════════════════════════════════════════════════════════════
+
+AUTOMATED OPTION:
+
+  Run: START_CHATBOT_NGROK.bat
+  Then follow on-screen instructions
+
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL POINTS:
+
+  ✓ Ngrok MUST point to PORT 8001 (chatbot service)
+  ✗ NOT port 8000 (gateway service)
+  
+  ✓ Update ngrok URL in BOTH Backend\.env AND new frontend\.env.local
+  
+  ✓ Restart chatbot service AFTER updating .env
+  
+  ✓ Clear ngrok warning page by visiting URL in browser
+
+═══════════════════════════════════════════════════════════════════════════════
+
+CURRENT CONFIGURATION:
+
+  Ngrok URL: https://69f21cfd502a.ngrok-free.app
+  
+  ⚠️  WARNING: This URL is currently forwarding to PORT 8000
+  ⚠️  You MUST restart ngrok with PORT 8001
+
+═══════════════════════════════════════════════════════════════════════════════
+
+HELP:
+
+  Full Instructions: CORS_FIX_INSTRUCTIONS.md
+  What Was Changed: CORS_FIX_SUMMARY.md
+  
+═══════════════════════════════════════════════════════════════════════════════

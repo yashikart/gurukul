@@ -1,0 +1,943 @@
+{
+  "simulation_run": "2025-12-08T05:50:50.427047",
+  "num_players": 10,
+  "events": [
+    {
+      "event_id": "75071358-1b35-4818-a45e-526864853d18",
+      "user_id": "player_1",
+      "event_type": "rebirth",
+      "timestamp": "2025-12-08T05:50:31.783990",
+      "data": {
+        "new_user_id": "reborn_player_1_1",
+        "inherited_karma": 148.59,
+        "starting_level": "learner"
+      }
+    },
+    {
+      "event_id": "2a441e71-ca72-4b13-b125-b119dffd5621",
+      "user_id": "player_1",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:31.894353",
+      "data": {
+        "net_influence": 3.63,
+        "module_impacts": {
+          "finance": 25.74,
+          "game": 13.39,
+          "gurukul": 8.53,
+          "insight": -3.22
+        }
+      }
+    },
+    {
+      "event_id": "a227659a-8c6b-4008-a0e0-2afd0e5d24e0",
+      "user_id": "player_1",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:32.004836",
+      "data": {
+        "loka_assignment": "Swarga",
+        "net_karma": 24.85,
+        "rebirth_count": 3
+      }
+    },
+    {
+      "event_id": "a423cb88-12db-446d-b3ee-2ab430c5beea",
+      "user_id": "player_1",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:32.116422",
+      "data": {
+        "loka_assignment": "Antarloka",
+        "net_karma": 458.83,
+        "rebirth_count": 2
+      }
+    },
+    {
+      "event_id": "a3321029-123e-4c74-a6fe-891121d8eace",
+      "user_id": "player_1",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:32.225720",
+      "data": {
+        "net_influence": 36.29,
+        "module_impacts": {
+          "finance": 4.45,
+          "game": 4.99,
+          "gurukul": 10.25,
+          "insight": 6.3
+        }
+      }
+    },
+    {
+      "event_id": "a510a84e-9de2-492b-aa3d-0fee80f3b5a3",
+      "user_id": "player_1",
+      "event_type": "rebirth",
+      "timestamp": "2025-12-08T05:50:32.336418",
+      "data": {
+        "new_user_id": "reborn_player_1_6",
+        "inherited_karma": 51.71,
+        "starting_level": "volunteer"
+      }
+    },
+    {
+      "event_id": "251aed6b-3781-4076-927a-757979cdf6e7",
+      "user_id": "player_1",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:32.445727",
+      "data": {
+        "loka_assignment": "Mrityuloka",
+        "net_karma": -78.22,
+        "rebirth_count": 2
+      }
+    },
+    {
+      "event_id": "d5d92e02-9f42-4316-9ae2-d82d4f165f0d",
+      "user_id": "player_1",
+      "event_type": "analytics",
+      "timestamp": "2025-12-08T05:50:32.556242",
+      "data": {
+        "karma_trend": "increasing",
+        "paap_punya_ratio": 1.36,
+        "engagement_score": 100
+      }
+    },
+    {
+      "event_id": "b90ed3d4-bf1e-4ef4-b96f-128efbf070da",
+      "user_id": "player_1",
+      "event_type": "rebirth",
+      "timestamp": "2025-12-08T05:50:32.666042",
+      "data": {
+        "new_user_id": "reborn_player_1_9",
+        "inherited_karma": 290.48,
+        "starting_level": "learner"
+      }
+    },
+    {
+      "event_id": "93a7ac06-9cfa-4a3a-a0e8-f6434203d3d6",
+      "user_id": "player_1",
+      "event_type": "life_event",
+      "timestamp": "2025-12-08T05:50:32.775700",
+      "data": {
+        "action": "meditation",
+        "karma_impact": 24.95,
+        "role_progression": "learner"
+      }
+    },
+    {
+      "event_id": "9ed4d6c5-fb60-4a55-8262-809ecc7d1c44",
+      "user_id": "player_2",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:32.885494",
+      "data": {
+        "net_influence": -9.31,
+        "module_impacts": {
+          "finance": 28.96,
+          "game": 8.06,
+          "gurukul": 11.64,
+          "insight": 26.61
+        }
+      }
+    },
+    {
+      "event_id": "f9534d67-1e42-4830-a6c6-822b3baf738f",
+      "user_id": "player_2",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:32.996007",
+      "data": {
+        "loka_assignment": "Mrityuloka",
+        "net_karma": 428.36,
+        "rebirth_count": 0
+      }
+    },
+    {
+      "event_id": "0c8148f3-50c6-440c-8287-5aed13ded727",
+      "user_id": "player_2",
+      "event_type": "rebirth",
+      "timestamp": "2025-12-08T05:50:33.106114",
+      "data": {
+        "new_user_id": "reborn_player_2_3",
+        "inherited_karma": 186.1,
+        "starting_level": "learner"
+      }
+    },
+    {
+      "event_id": "b7b56ea4-435a-4e7a-9a5c-e8b4c71e0a49",
+      "user_id": "player_2",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:33.216772",
+      "data": {
+        "net_influence": -5.56,
+        "module_impacts": {
+          "finance": 21.26,
+          "game": -1.48,
+          "gurukul": 23.22,
+          "insight": -2.38
+        }
+      }
+    },
+    {
+      "event_id": "b09d9421-6243-4ad7-b710-4da98f8486cc",
+      "user_id": "player_2",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:33.326435",
+      "data": {
+        "net_influence": -1.1,
+        "module_impacts": {
+          "finance": 19.42,
+          "game": 12.6,
+          "gurukul": 2.69,
+          "insight": 10.04
+        }
+      }
+    },
+    {
+      "event_id": "e727042d-3214-4425-8b13-e6cc2d6cb1c7",
+      "user_id": "player_2",
+      "event_type": "rebirth",
+      "timestamp": "2025-12-08T05:50:33.437543",
+      "data": {
+        "new_user_id": "reborn_player_2_6",
+        "inherited_karma": 171.23,
+        "starting_level": "volunteer"
+      }
+    },
+    {
+      "event_id": "4b30a5ee-7a30-4220-815a-5b2d0982eb94",
+      "user_id": "player_2",
+      "event_type": "analytics",
+      "timestamp": "2025-12-08T05:50:33.547099",
+      "data": {
+        "karma_trend": "increasing",
+        "paap_punya_ratio": 0.28,
+        "engagement_score": 24
+      }
+    },
+    {
+      "event_id": "3f6cca18-6ab0-4e9a-866a-51dbe98c20e6",
+      "user_id": "player_2",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:33.656775",
+      "data": {
+        "loka_assignment": "Naraka",
+        "net_karma": 295.24,
+        "rebirth_count": 4
+      }
+    },
+    {
+      "event_id": "39c3ca9e-3086-487e-b474-7d95600621bf",
+      "user_id": "player_2",
+      "event_type": "analytics",
+      "timestamp": "2025-12-08T05:50:33.764938",
+      "data": {
+        "karma_trend": "increasing",
+        "paap_punya_ratio": 0.76,
+        "engagement_score": 44
+      }
+    },
+    {
+      "event_id": "2ca3e010-63ac-4d17-8c80-b32565aaa156",
+      "user_id": "player_2",
+      "event_type": "analytics",
+      "timestamp": "2025-12-08T05:50:33.874460",
+      "data": {
+        "karma_trend": "increasing",
+        "paap_punya_ratio": 1.56,
+        "engagement_score": 62
+      }
+    },
+    {
+      "event_id": "572cd597-0b92-4dde-968d-9ee9caaf4185",
+      "user_id": "player_3",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:33.985426",
+      "data": {
+        "net_influence": 14.21,
+        "module_impacts": {
+          "finance": 15.06,
+          "game": 1.14,
+          "gurukul": 4.23,
+          "insight": 26.17
+        }
+      }
+    },
+    {
+      "event_id": "70b95f26-58c5-45d8-91cc-cf72cee62708",
+      "user_id": "player_3",
+      "event_type": "analytics",
+      "timestamp": "2025-12-08T05:50:34.093852",
+      "data": {
+        "karma_trend": "decreasing",
+        "paap_punya_ratio": 2.51,
+        "engagement_score": 55
+      }
+    },
+    {
+      "event_id": "7e67baf2-190f-4918-a090-b3044cf225ea",
+      "user_id": "player_3",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:34.203061",
+      "data": {
+        "net_influence": -35.54,
+        "module_impacts": {
+          "finance": 9.21,
+          "game": 4.64,
+          "gurukul": -3.9,
+          "insight": 19.83
+        }
+      }
+    },
+    {
+      "event_id": "31c4b81c-8abd-4785-a4d2-72e43cfd391b",
+      "user_id": "player_3",
+      "event_type": "analytics",
+      "timestamp": "2025-12-08T05:50:34.313903",
+      "data": {
+        "karma_trend": "stable",
+        "paap_punya_ratio": 2.21,
+        "engagement_score": 88
+      }
+    },
+    {
+      "event_id": "2f82a4da-1e24-4cec-bd3b-be4e0c9c2923",
+      "user_id": "player_3",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:34.422701",
+      "data": {
+        "net_influence": 98.91,
+        "module_impacts": {
+          "finance": 5.51,
+          "game": 5.17,
+          "gurukul": 24.02,
+          "insight": 1.1
+        }
+      }
+    },
+    {
+      "event_id": "e43e9232-7308-4fa1-be0b-66f0a9f71c48",
+      "user_id": "player_4",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:34.531450",
+      "data": {
+        "net_influence": -17.12,
+        "module_impacts": {
+          "finance": -0.75,
+          "game": -4.13,
+          "gurukul": 20.72,
+          "insight": 19.98
+        }
+      }
+    },
+    {
+      "event_id": "3d2530ab-5269-4f4e-a18f-ef53d91999fe",
+      "user_id": "player_4",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:34.640048",
+      "data": {
+        "loka_assignment": "Swarga",
+        "net_karma": 336.62,
+        "rebirth_count": 5
+      }
+    },
+    {
+      "event_id": "a45ef64f-3b5f-4df3-ba0c-f9877fffcb84",
+      "user_id": "player_4",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:34.749812",
+      "data": {
+        "net_influence": -45.01,
+        "module_impacts": {
+          "finance": -1.84,
+          "game": 6.84,
+          "gurukul": -3.08,
+          "insight": 25.22
+        }
+      }
+    },
+    {
+      "event_id": "ee6157e3-e561-4ee6-b3b6-f18d7001548d",
+      "user_id": "player_4",
+      "event_type": "rebirth",
+      "timestamp": "2025-12-08T05:50:34.859134",
+      "data": {
+        "new_user_id": "reborn_player_4_4",
+        "inherited_karma": 65.25,
+        "starting_level": "volunteer"
+      }
+    },
+    {
+      "event_id": "df85702c-4cda-4145-b576-f804e1d993b7",
+      "user_id": "player_4",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:34.968270",
+      "data": {
+        "net_influence": 30.81,
+        "module_impacts": {
+          "finance": -3.9,
+          "game": 9.41,
+          "gurukul": -4.22,
+          "insight": 2.75
+        }
+      }
+    },
+    {
+      "event_id": "b4bc9c95-f1dd-4a80-8e40-93335efa08a1",
+      "user_id": "player_5",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:35.078477",
+      "data": {
+        "loka_assignment": "Naraka",
+        "net_karma": -53.21,
+        "rebirth_count": 4
+      }
+    },
+    {
+      "event_id": "f4deb456-3455-4bd0-8f25-4ed84688b882",
+      "user_id": "player_5",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:35.188416",
+      "data": {
+        "loka_assignment": "Antarloka",
+        "net_karma": 130.05,
+        "rebirth_count": 1
+      }
+    },
+    {
+      "event_id": "c6862952-f855-4f37-9b56-bf4e5911713f",
+      "user_id": "player_5",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:35.297488",
+      "data": {
+        "loka_assignment": "Swarga",
+        "net_karma": 476.86,
+        "rebirth_count": 4
+      }
+    },
+    {
+      "event_id": "87489b87-976a-4f5d-aa75-3cfceb052ae5",
+      "user_id": "player_5",
+      "event_type": "life_event",
+      "timestamp": "2025-12-08T05:50:35.406206",
+      "data": {
+        "action": "meditation",
+        "karma_impact": -4.42,
+        "role_progression": "guru"
+      }
+    },
+    {
+      "event_id": "d41cf088-70d7-4a63-ab97-9ea532f48809",
+      "user_id": "player_5",
+      "event_type": "life_event",
+      "timestamp": "2025-12-08T05:50:35.515862",
+      "data": {
+        "action": "selfless_service",
+        "karma_impact": 6.69,
+        "role_progression": "guru"
+      }
+    },
+    {
+      "event_id": "ead8606b-dfe6-4dfc-9ae8-6b8e7e12d0ab",
+      "user_id": "player_5",
+      "event_type": "life_event",
+      "timestamp": "2025-12-08T05:50:35.625696",
+      "data": {
+        "action": "selfless_service",
+        "karma_impact": 10.87,
+        "role_progression": "learner"
+      }
+    },
+    {
+      "event_id": "182b4c5a-6323-485d-861e-7db3ac1b57be",
+      "user_id": "player_5",
+      "event_type": "analytics",
+      "timestamp": "2025-12-08T05:50:35.735651",
+      "data": {
+        "karma_trend": "decreasing",
+        "paap_punya_ratio": 1.37,
+        "engagement_score": 99
+      }
+    },
+    {
+      "event_id": "0d6757be-3315-4d76-9352-a082b7aeaced",
+      "user_id": "player_5",
+      "event_type": "life_event",
+      "timestamp": "2025-12-08T05:50:35.845709",
+      "data": {
+        "action": "meditation",
+        "karma_impact": 10.06,
+        "role_progression": "volunteer"
+      }
+    },
+    {
+      "event_id": "700f07fd-249b-40d8-8de6-cf7d79dd1053",
+      "user_id": "player_6",
+      "event_type": "rebirth",
+      "timestamp": "2025-12-08T05:50:35.956654",
+      "data": {
+        "new_user_id": "reborn_player_6_1",
+        "inherited_karma": 202.08,
+        "starting_level": "volunteer"
+      }
+    },
+    {
+      "event_id": "0cb30891-f28a-4b65-a98b-556c0c35f09b",
+      "user_id": "player_6",
+      "event_type": "rebirth",
+      "timestamp": "2025-12-08T05:50:36.067471",
+      "data": {
+        "new_user_id": "reborn_player_6_2",
+        "inherited_karma": 20.9,
+        "starting_level": "learner"
+      }
+    },
+    {
+      "event_id": "662dbef0-3360-4c40-8e38-a6668f3d7cd1",
+      "user_id": "player_6",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:36.178048",
+      "data": {
+        "loka_assignment": "Antarloka",
+        "net_karma": 141.73,
+        "rebirth_count": 4
+      }
+    },
+    {
+      "event_id": "008fa280-9738-46fb-8954-d63eaa0424f2",
+      "user_id": "player_6",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:36.288603",
+      "data": {
+        "loka_assignment": "Swarga",
+        "net_karma": 235.48,
+        "rebirth_count": 1
+      }
+    },
+    {
+      "event_id": "c4eb8c3f-7447-4ac2-b223-e9c17c69d03c",
+      "user_id": "player_6",
+      "event_type": "life_event",
+      "timestamp": "2025-12-08T05:50:36.397408",
+      "data": {
+        "action": "cheat",
+        "karma_impact": 0.81,
+        "role_progression": "seva"
+      }
+    },
+    {
+      "event_id": "4e709e81-947d-4416-8cc6-93a074be4c3d",
+      "user_id": "player_6",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:36.507785",
+      "data": {
+        "loka_assignment": "Mrityuloka",
+        "net_karma": 142.97,
+        "rebirth_count": 3
+      }
+    },
+    {
+      "event_id": "e1ace9df-11a4-4c65-a0e2-445d45026e8b",
+      "user_id": "player_7",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:36.615961",
+      "data": {
+        "net_influence": 77.38,
+        "module_impacts": {
+          "finance": 17.9,
+          "game": -4.86,
+          "gurukul": -2.84,
+          "insight": 24.43
+        }
+      }
+    },
+    {
+      "event_id": "280f365f-5977-4092-a8fa-ec8dd961e94c",
+      "user_id": "player_7",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:36.725111",
+      "data": {
+        "net_influence": 81.46,
+        "module_impacts": {
+          "finance": 28.69,
+          "game": 15.47,
+          "gurukul": -3.6,
+          "insight": 17.83
+        }
+      }
+    },
+    {
+      "event_id": "6c5f15da-fbec-4c9f-bbb0-da6d87c53d05",
+      "user_id": "player_7",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:36.833712",
+      "data": {
+        "net_influence": 20.93,
+        "module_impacts": {
+          "finance": -8.86,
+          "game": -2.55,
+          "gurukul": 6.34,
+          "insight": 33.85
+        }
+      }
+    },
+    {
+      "event_id": "dd4c2f76-b24c-4279-9898-c68d148d42df",
+      "user_id": "player_7",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:36.942964",
+      "data": {
+        "loka_assignment": "Antarloka",
+        "net_karma": 252.96,
+        "rebirth_count": 4
+      }
+    },
+    {
+      "event_id": "135203a2-a44b-4d53-b747-97fa126169cc",
+      "user_id": "player_7",
+      "event_type": "rebirth",
+      "timestamp": "2025-12-08T05:50:37.052923",
+      "data": {
+        "new_user_id": "reborn_player_7_5",
+        "inherited_karma": 185.04,
+        "starting_level": "learner"
+      }
+    },
+    {
+      "event_id": "5bda4ba8-ef69-4e58-9c5b-2abe5f329036",
+      "user_id": "player_7",
+      "event_type": "analytics",
+      "timestamp": "2025-12-08T05:50:37.162030",
+      "data": {
+        "karma_trend": "increasing",
+        "paap_punya_ratio": 2.37,
+        "engagement_score": 11
+      }
+    },
+    {
+      "event_id": "de4804d6-b189-4b0c-80ed-7702fdb4f8f2",
+      "user_id": "player_7",
+      "event_type": "life_event",
+      "timestamp": "2025-12-08T05:50:37.271354",
+      "data": {
+        "action": "helping_peers",
+        "karma_impact": 36.02,
+        "role_progression": "seva"
+      }
+    },
+    {
+      "event_id": "34f380c8-e5cb-4c6c-b372-dc2dbd8ccae5",
+      "user_id": "player_7",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:37.381193",
+      "data": {
+        "loka_assignment": "Mrityuloka",
+        "net_karma": 218.49,
+        "rebirth_count": 4
+      }
+    },
+    {
+      "event_id": "ed9de774-e5ce-47fc-935e-83885d22c574",
+      "user_id": "player_7",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:37.491667",
+      "data": {
+        "loka_assignment": "Antarloka",
+        "net_karma": 123.69,
+        "rebirth_count": 0
+      }
+    },
+    {
+      "event_id": "8bdf4047-9545-431c-bdc8-9afe943ef5f0",
+      "user_id": "player_8",
+      "event_type": "rebirth",
+      "timestamp": "2025-12-08T05:50:37.601878",
+      "data": {
+        "new_user_id": "reborn_player_8_1",
+        "inherited_karma": 194.51,
+        "starting_level": "volunteer"
+      }
+    },
+    {
+      "event_id": "cc5222f2-b751-4c5a-b508-aa10141410d3",
+      "user_id": "player_8",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:37.710758",
+      "data": {
+        "loka_assignment": "Swarga",
+        "net_karma": 82.35,
+        "rebirth_count": 2
+      }
+    },
+    {
+      "event_id": "8bada4a2-9b37-426a-9b86-ebd515c4cda3",
+      "user_id": "player_8",
+      "event_type": "analytics",
+      "timestamp": "2025-12-08T05:50:37.819289",
+      "data": {
+        "karma_trend": "decreasing",
+        "paap_punya_ratio": 1.97,
+        "engagement_score": 89
+      }
+    },
+    {
+      "event_id": "d4c31da5-8e18-48d8-8ede-7dfa9250fa51",
+      "user_id": "player_8",
+      "event_type": "rebirth",
+      "timestamp": "2025-12-08T05:50:37.929188",
+      "data": {
+        "new_user_id": "reborn_player_8_4",
+        "inherited_karma": 246.69,
+        "starting_level": "learner"
+      }
+    },
+    {
+      "event_id": "664fbc74-bfcf-4634-a357-791a19475f45",
+      "user_id": "player_8",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:38.039415",
+      "data": {
+        "loka_assignment": "Mrityuloka",
+        "net_karma": 54.3,
+        "rebirth_count": 2
+      }
+    },
+    {
+      "event_id": "fdcbb450-a2c9-4044-8803-f0cd96347d1d",
+      "user_id": "player_8",
+      "event_type": "life_event",
+      "timestamp": "2025-12-08T05:50:38.149947",
+      "data": {
+        "action": "meditation",
+        "karma_impact": -2.08,
+        "role_progression": "volunteer"
+      }
+    },
+    {
+      "event_id": "bf3aee3d-e09e-4bf7-8c0f-29435533dae5",
+      "user_id": "player_9",
+      "event_type": "life_event",
+      "timestamp": "2025-12-08T05:50:38.260981",
+      "data": {
+        "action": "completing_lessons",
+        "karma_impact": -8.88,
+        "role_progression": "guru"
+      }
+    },
+    {
+      "event_id": "915ee7fe-21af-43d6-a7d3-9794b44660f2",
+      "user_id": "player_9",
+      "event_type": "life_event",
+      "timestamp": "2025-12-08T05:50:38.369820",
+      "data": {
+        "action": "selfless_service",
+        "karma_impact": 20.39,
+        "role_progression": "learner"
+      }
+    },
+    {
+      "event_id": "88fb05eb-b2a9-445c-9075-9af5963d0de9",
+      "user_id": "player_9",
+      "event_type": "rebirth",
+      "timestamp": "2025-12-08T05:50:38.478830",
+      "data": {
+        "new_user_id": "reborn_player_9_3",
+        "inherited_karma": 225.61,
+        "starting_level": "learner"
+      }
+    },
+    {
+      "event_id": "11ecf4ea-aece-48a0-9529-e53b13b2f6b6",
+      "user_id": "player_9",
+      "event_type": "rebirth",
+      "timestamp": "2025-12-08T05:50:38.588359",
+      "data": {
+        "new_user_id": "reborn_player_9_4",
+        "inherited_karma": 107.32,
+        "starting_level": "learner"
+      }
+    },
+    {
+      "event_id": "7c8d0c7b-0736-4d36-b84e-fa13837151e9",
+      "user_id": "player_9",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:38.698183",
+      "data": {
+        "loka_assignment": "Swarga",
+        "net_karma": 379.24,
+        "rebirth_count": 2
+      }
+    },
+    {
+      "event_id": "08ccb4f3-662a-4c3a-ae9e-312cb1605e2f",
+      "user_id": "player_9",
+      "event_type": "life_event",
+      "timestamp": "2025-12-08T05:50:38.808060",
+      "data": {
+        "action": "cheat",
+        "karma_impact": -9.33,
+        "role_progression": "volunteer"
+      }
+    },
+    {
+      "event_id": "ae7418fb-ecaf-48c2-8a7c-8f913aa6f5f2",
+      "user_id": "player_9",
+      "event_type": "rebirth",
+      "timestamp": "2025-12-08T05:50:38.917333",
+      "data": {
+        "new_user_id": "reborn_player_9_7",
+        "inherited_karma": 196.93,
+        "starting_level": "volunteer"
+      }
+    },
+    {
+      "event_id": "149beed0-641a-4178-9728-ebed31c945b0",
+      "user_id": "player_9",
+      "event_type": "rebirth",
+      "timestamp": "2025-12-08T05:50:39.027537",
+      "data": {
+        "new_user_id": "reborn_player_9_8",
+        "inherited_karma": 96.27,
+        "starting_level": "volunteer"
+      }
+    },
+    {
+      "event_id": "9aa4663a-5445-4948-8588-ae35fa43f50b",
+      "user_id": "player_10",
+      "event_type": "analytics",
+      "timestamp": "2025-12-08T05:50:39.138730",
+      "data": {
+        "karma_trend": "decreasing",
+        "paap_punya_ratio": 2.38,
+        "engagement_score": 37
+      }
+    },
+    {
+      "event_id": "719308fe-b01c-45f9-a0fa-e6dfc396c6a0",
+      "user_id": "player_10",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:39.247432",
+      "data": {
+        "net_influence": 79.45,
+        "module_impacts": {
+          "finance": 0.94,
+          "game": 19.31,
+          "gurukul": 20.7,
+          "insight": 31.43
+        }
+      }
+    },
+    {
+      "event_id": "9d348507-4619-4d56-bd41-1405878dcb8e",
+      "user_id": "player_10",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:39.358130",
+      "data": {
+        "loka_assignment": "Mrityuloka",
+        "net_karma": 37.8,
+        "rebirth_count": 3
+      }
+    },
+    {
+      "event_id": "38adfa6f-6fa8-4a88-8c8f-e7d28b8e1bfd",
+      "user_id": "player_10",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:39.467794",
+      "data": {
+        "net_influence": 2.17,
+        "module_impacts": {
+          "finance": 14.11,
+          "game": 17.81,
+          "gurukul": 1.44,
+          "insight": 8.77
+        }
+      }
+    },
+    {
+      "event_id": "333d54f8-d32b-4408-b6b6-297b6e69a834",
+      "user_id": "player_10",
+      "event_type": "feedback_signal",
+      "timestamp": "2025-12-08T05:50:39.579274",
+      "data": {
+        "net_influence": -10.1,
+        "module_impacts": {
+          "finance": 0.23,
+          "game": 0.11,
+          "gurukul": -1.37,
+          "insight": 28.91
+        }
+      }
+    },
+    {
+      "event_id": "be251629-b4df-4ad0-aee1-831d8b1a0dc5",
+      "user_id": "player_10",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:39.690624",
+      "data": {
+        "loka_assignment": "Antarloka",
+        "net_karma": 64.59,
+        "rebirth_count": 5
+      }
+    },
+    {
+      "event_id": "fcc10c54-6e69-4a5d-a0c7-9ff15537e8f9",
+      "user_id": "player_10",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:39.801167",
+      "data": {
+        "loka_assignment": "Antarloka",
+        "net_karma": -184.12,
+        "rebirth_count": 0
+      }
+    },
+    {
+      "event_id": "6383d9e1-2888-4077-bf89-4f5ea6cafdb3",
+      "user_id": "player_10",
+      "event_type": "life_event",
+      "timestamp": "2025-12-08T05:50:39.911567",
+      "data": {
+        "action": "helping_peers",
+        "karma_impact": 7.29,
+        "role_progression": "guru"
+      }
+    },
+    {
+      "event_id": "4b97a0ef-60b2-4f48-b3a2-00235a86e220",
+      "user_id": "player_10",
+      "event_type": "death_event",
+      "timestamp": "2025-12-08T05:50:40.020850",
+      "data": {
+        "loka_assignment": "Swarga",
+        "net_karma": -148.29,
+        "rebirth_count": 1
+      }
+    },
+    {
+      "event_id": "1bba7d1e-c3a0-4f5e-925a-3a371ce8fe8c",
+      "user_id": "player_10",
+      "event_type": "analytics",
+      "timestamp": "2025-12-08T05:50:40.130451",
+      "data": {
+        "karma_trend": "decreasing",
+        "paap_punya_ratio": 1.48,
+        "engagement_score": 3
+      }
+    }
+  ],
+  "summary": {
+    "total_events": 77,
+    "event_types": {
+      "rebirth": 15,
+      "feedback_signal": 17,
+      "death_event": 22,
+      "analytics": 11,
+      "life_event": 12
+    },
+    "players": {
+      "player_1": 10,
+      "player_2": 10,
+      "player_3": 5,
+      "player_4": 5,
+      "player_5": 8,
+      "player_6": 6,
+      "player_7": 9,
+      "player_8": 6,
+      "player_9": 8,
+      "player_10": 10
+    }
+  }
+}

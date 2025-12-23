@@ -25,6 +25,12 @@ torchvision>=0.15.0
 torchaudio>=2.0.0
 transformers>=4.20.0
 sentence-transformers>=2.2.0
+# Local Model Support (Arabic Model Integration)
+peft>=0.17.1
+bitsandbytes>=0.41.0
+accelerate>=0.20.0
+# Optional: unsloth (for optimized training/inference utilities)
+# unsloth>=2024.1
 
 # LangChain Framework (Financial Simulator)
 langchain>=0.1.0
@@ -85,6 +91,10 @@ jsonschema>=4.17.0
 psutil>=5.9.0
 schedule>=1.2.0
 python-multipart>=0.0.6
+
+# Cloud Storage (for checkpoint downloads)
+boto3>=1.28.0  # AWS S3 support for Arabic model checkpoint
+requests>=2.31.0  # For direct URL downloads
 
 # Development & Testing
 pytest>=7.2.0

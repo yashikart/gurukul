@@ -6,6 +6,7 @@
 
 import { safeSetItem } from './storageManager';
 import chatErrorRecovery from './chatErrorRecovery';
+import { translate } from '../store/languageSlice';
 
 // Simple compression utilities (inline implementation)
 const compressData = (data) => {
@@ -72,22 +73,24 @@ const getWelcomeMessage = (isReturningUser = false, lastSessionTime = null, hasR
   // If there's no real conversation history, always treat as first-time user
   if (!hasRealConversation) {
     // No real conversation - use first-time Gurukul introduction
-    message = WELCOME_MESSAGES[Math.floor(Math.random() * WELCOME_MESSAGES.length)];
+    const rawMessage = WELCOME_MESSAGES[Math.floor(Math.random() * WELCOME_MESSAGES.length)];
+    message = translate(rawMessage);
   } else if (isReturningUser && lastSessionTime) {
     const timeDiff = Date.now() - new Date(lastSessionTime).getTime();
     const hoursDiff = timeDiff / (1000 * 60 * 60);
 
     // User has real conversation history - use continuation messages
     if (hoursDiff < 1) {
-      message = '👋 Welcome back! Ready to continue our conversation?';
+      message = translate('👋 Welcome back! Ready to continue our conversation?');
     } else if (hoursDiff < 24) {
-      message = '🌅 Good to see you again! What would you like to explore today?';
+      message = translate('🌅 Good to see you again! What would you like to explore today?');
     } else {
-      message = '🌟 Welcome back! It\'s been a while. What new topics are you interested in learning about?';
+      message = translate('🌟 Welcome back! It\'s been a while. What new topics are you interested in learning about?');
     }
   } else {
     // First time or new session - use random welcome message with proper Gurukul introduction
-    message = WELCOME_MESSAGES[Math.floor(Math.random() * WELCOME_MESSAGES.length)];
+    const rawMessage = WELCOME_MESSAGES[Math.floor(Math.random() * WELCOME_MESSAGES.length)];
+    message = translate(rawMessage);
   }
 
   return {

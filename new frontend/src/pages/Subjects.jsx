@@ -4,6 +4,7 @@ import GlassInput from "../components/GlassInput";
 import GlassButton from "../components/GlassButton";
 import { LessonLiveRenderer, LessonStreamRenderer } from "../components/LessonLiveRenderer";
 import { useJupiterTTS } from "../hooks/useTTS";
+import { useTranslation } from "react-i18next";
 
 import {
   useGenerateEnhancedLessonMutation,
@@ -14,20 +15,24 @@ import {
   formatEnhancedLessonData,
   formatUserProgressData
 } from "../api/orchestrationApiSlice";
-import { Book, BookOpen, BarChart3 } from "lucide-react";
-import { cleanContentForVideo } from "../utils/contentFormatter";
+import { useLazyGenerateLessonQuery } from "../api/subjectsApiSlice";
+import { Book, BookOpen } from "lucide-react";
 import { useSelector } from "react-redux";
 import { selectUserId } from "../store/authSlice";
 import { toast } from "react-hot-toast";
-import { API_BASE_URL, CHAT_API_BASE_URL } from "../config";
-import { useVideo } from "../context/VideoContext";
-import UserProgressDashboard from "../components/UserProgressDashboard";
+import { processSubjectsUsage, dispatchKarmaChange } from "../utils/karmaManager";
+import { API_BASE_URL, AGENT_API_BASE_URL } from "../config";
+import YouTubeRecommendations from "../components/YouTubeRecommendations";
 
 export default function Subjects() {
+  const { t } = useTranslation();
   // Get user ID first (needed for hooks)
   const userId = useSelector(selectUserId) || "guest-user";
 
 
+
+  // Backend API hook for generate_lesson endpoint
+  const [triggerGenerateLesson, { isLoading: isGeneratingLesson, error: generateLessonError }] = useLazyGenerateLessonQuery();
 
   // Orchestration API hooks
   const [
@@ -53,8 +58,6 @@ export default function Subjects() {
     skip: !integrationStatus?.integration_status?.overall_valid || !userId || userId === "guest-user"
   });
 
-  // Video context
-  const { generatedVideo, showVideoInSidebar, showVideo, hideVideo } = useVideo();
 
   // Component state
   const [selectedSubject, setSelectedSubject] = useState("");
@@ -65,11 +68,9 @@ export default function Subjects() {
   const [lessonData, setLessonData] = useState(null);
   const [includeWikipedia, setIncludeWikipedia] = useState(true);
   const [useKnowledgeStore, setUseKnowledgeStore] = useState(true);
-  const [selectedVideoStyle, setSelectedVideoStyle] = useState('realistic'); // Video style selection
 
   // Orchestration-specific state
   const [useOrchestration, setUseOrchestration] = useState(true);
-  const [showProgressDashboard, setShowProgressDashboard] = useState(false);
   const [lastQuizScore, setLastQuizScore] = useState(null);
   const [showInterventionPanel, setShowInterventionPanel] = useState(false);
 
@@ -97,122 +98,12 @@ export default function Subjects() {
 
   // Use the imported cleanContentForVideo utility for cleaning content
 
-  // Helper function to transform lesson data into video format
-  const transformLessonToVideoFormat = (lessonData, subject, topic) => {
-    const rawExplanation = lessonData.explanation || lessonData.text || "";
-
-    // Clean the content first using the imported utility
-    const cleanedContent = cleanContentForVideo(rawExplanation);
-
-    // Create a narrative story from the lesson content
-    const narrativeStory = createNarrativeStory(cleanedContent, subject, topic);
-
-    // Split narrative into meaningful sentences for scenes
-    const sentences = narrativeStory.split(/[.!?]+/).filter(sentence =>
-      sentence.trim().length > 10 && // Minimum meaningful length
-      !sentence.includes('```') && // No code blocks
-      !sentence.includes('json') && // No technical references
-      !sentence.includes('html') // No HTML references
-    );
-
-    // Create scenes from cleaned sentences
-    const scenes = sentences.map((sentence) => ({
-      text: sentence.trim(),
-      duration: Math.max(5.0, Math.min(8.0, sentence.trim().length * 0.08))
-    }));
-
-    // Create visual prompts for each scene (clean narrative descriptions)
-    const prompts = sentences.map((sentence) => {
-      const cleanPrompt = sentence.trim();
-      const contextualPrompt = `${cleanPrompt}, spiritual journey, educational content, meditation theme`;
-      return contextualPrompt;
-    });
-
-    // Calculate total duration
-    const totalDuration = scenes.reduce((sum, scene) => sum + scene.duration, 0);
-
-    return {
-      title: `${subject}: ${topic}`,
-      level: "Advanced",
-      duration: `${Math.round(totalDuration)}-${Math.round(totalDuration + 30)} seconds`,
-      tts_enabled: true,
-      scenes: scenes,
-      prompts: prompts,
-      text: narrativeStory, // Send the clean narrative story
-      metadata: {
-        theme: "spiritual journey and meditation",
-        setting: "educational content",
-        character: "spiritual seeker",
-        lesson: "meditation and wisdom",
-        mood: "profound and transformative",
-        visual_style: "cinematic spiritual journey",
-        duration_target: `${Math.round(totalDuration)} seconds`,
-        created: new Date().toISOString().split('T')[0],
-        story_type: "educational_lesson",
-        production_generated: true
-      },
-      tts: true
-    };
-  };
-
-  // Helper function to create a narrative story from lesson content
-  const createNarrativeStory = (cleanedContent, subject, topic) => {
-    // If content is too technical or contains formatting, create a simple narrative
-    if (cleanedContent.length < 50 || cleanedContent.includes('quiz') || cleanedContent.includes('question')) {
-      // Create a basic narrative based on subject and topic
-      return createBasicNarrative(subject, topic);
-    }
-
-    // Extract key concepts and create a flowing narrative
-    const sentences = cleanedContent.split(/[.!?]+/).filter(s => s.trim().length > 10);
-
-    // Take the most meaningful sentences and create a story flow
-    const meaningfulSentences = sentences
-      .filter(s => !s.includes('*') && !s.includes('```') && s.length > 20)
-      .slice(0, 8); // Limit to 8 key sentences for video
-
-    if (meaningfulSentences.length === 0) {
-      return createBasicNarrative(subject, topic);
-    }
-
-    // Join sentences to create a flowing narrative
-    return meaningfulSentences.join('. ') + '.';
-  };
-
-  // Helper function to create a basic narrative when content is too technical
-  const createBasicNarrative = (subject, topic) => {
-    const narratives = {
-      history: `In the ancient times, great stories unfolded that shaped our world. The tale of ${topic} in ${subject} reveals profound wisdom and timeless lessons. Through the mists of time, we discover remarkable events and extraordinary people. Their legacy continues to inspire and guide us today. These stories teach us about courage, wisdom, and the human spirit. Each chapter reveals new insights about our shared heritage. The lessons from the past illuminate our path forward. Understanding these stories helps us grow and learn.`,
-
-      mathematics: `In the realm of numbers and patterns, ${topic} reveals the hidden beauty of ${subject}. Mathematical concepts dance together in perfect harmony. Each formula tells a story of logical thinking and problem-solving. Through careful observation, we discover elegant solutions. The world of mathematics opens doors to understanding. Every equation is a key to unlock new knowledge. These concepts help us make sense of the world around us. Mathematics is the language of the universe.`,
-
-      science: `In the fascinating world of science, ${topic} unveils the mysteries of ${subject}. Natural phenomena reveal their secrets through careful study. Scientists explore and discover amazing truths about our universe. Each experiment brings new understanding and wonder. The laws of nature guide us toward greater knowledge. Through observation and inquiry, we learn about the world. Science helps us understand how things work. These discoveries improve our lives and expand our minds.`,
-
-      default: `In the journey of learning, ${topic} opens new pathways of understanding in ${subject}. Knowledge flows like a river, carrying wisdom from one generation to the next. Each lesson builds upon previous discoveries and insights. Through study and reflection, we grow in wisdom and understanding. The pursuit of knowledge enriches our minds and souls. Every concept learned becomes a stepping stone to greater understanding. Education illuminates the path to personal growth and enlightenment. Learning is a lifelong adventure that never ends.`
-    };
-
-    return narratives[subject.toLowerCase()] || narratives.default;
-  };
-
-  // Helper function to get style modifiers based on selected style
-  const getStyleModifiers = (style) => {
-    const styleModifiers = {
-      realistic: {
-        visual_style: "photorealistic, high quality, detailed, natural lighting",
-        negative_prompt: "cartoon, anime, illustration, painting, drawing, art, sketch"
-      },
-      artistic: {
-        visual_style: "artistic, painterly, beautiful composition, creative lighting, stylized",
-        negative_prompt: "photorealistic, photograph, realistic, plain, boring"
-      },
-      anime: {
-        visual_style: "anime style, manga, Japanese animation, vibrant colors, expressive",
-        negative_prompt: "photorealistic, photograph, realistic, western animation"
-      }
-    };
-
-    return styleModifiers[style] || styleModifiers.realistic;
-  };
+  // Video transformation functions removed
+  // Video transformation functions removed - not implemented yet
+  const transformLessonToVideoFormat = () => { return null; };
+  const createNarrativeStory = () => { return ""; };
+  const createBasicNarrative = () => { return ""; };
+  const getStyleModifiers = () => { return {}; };
 
   // Safely render activity content that may be an object or string
   const renderActivityContent = (activity) => {
@@ -246,7 +137,7 @@ export default function Subjects() {
 
           {Array.isArray(instructions) && instructions.length > 0 && (
             <div>
-              <p className="text-white/80 font-medium">Instructions:</p>
+              <p className="text-white/80 font-medium">{t("Instructions")}:</p>
               <ol className="list-decimal list-inside text-white/90 space-y-1 mt-1">
                 {instructions.map((ins, idx) => (
                   <li key={idx}>{ins}</li>
@@ -260,7 +151,7 @@ export default function Subjects() {
 
           {Array.isArray(steps) && steps.length > 0 && (
             <div>
-              <p className="text-white/80 font-medium">Steps:</p>
+              <p className="text-white/80 font-medium">{t("Steps")}:</p>
               <ol className="list-decimal list-inside text-white/90 space-y-1 mt-1">
                 {steps.map((s, idx) => (
                   <li key={idx}>{s}</li>
@@ -271,7 +162,7 @@ export default function Subjects() {
 
           {Array.isArray(materials_needed) && materials_needed.length > 0 && (
             <div>
-              <p className="text-white/80 font-medium">Materials Needed:</p>
+              <p className="text-white/80 font-medium">{t("Materials Needed")}:</p>
               <ul className="list-disc list-inside text-white/90 space-y-1 mt-1">
                 {materials_needed.map((m, idx) => (
                   <li key={idx}>{m}</li>
@@ -281,7 +172,7 @@ export default function Subjects() {
           )}
           {Array.isArray(materials) && materials.length > 0 && (
             <div>
-              <p className="text-white/80 font-medium">Materials:</p>
+              <p className="text-white/80 font-medium">{t("Materials")}:</p>
               <ul className="list-disc list-inside text-white/90 space-y-1 mt-1">
                 {materials.map((m, idx) => (
                   <li key={idx}>{m}</li>
@@ -334,7 +225,7 @@ export default function Subjects() {
   // Handler for triggering interventions
   const handleTriggerIntervention = async () => {
     if (!userId || userId === "guest-user") {
-      toast.error("Please log in to access personalized interventions.");
+      toast.error(t("Please log in to access personalized interventions."));
       return;
     }
 
@@ -370,15 +261,13 @@ export default function Subjects() {
   // Cleanup blob URLs to prevent memory leaks
   useEffect(() => {
     return () => {
-      if (generatedVideo?.url) {
-        URL.revokeObjectURL(generatedVideo.url);
-      }
+      // Video cleanup removed
     };
-  }, [generatedVideo]);
+  }, []);
 
   // Computed values for loading and error states
-  const isLoadingData = isSubmitting;
-  const isErrorData = false;
+  const isLoadingData = isSubmitting || isGeneratingLesson;
+  const isErrorData = generateLessonError || (lessonData?.status === "error");
   const subjectData = lessonData;
 
   // Reset results when subject or topic changes
@@ -432,7 +321,7 @@ export default function Subjects() {
     setFallbackContentAvailable(false);
     setIsOfflineMode(false);
     setLastError(null);
-    hideVideo(); // Clear any generated video and hide from sidebar
+    // Video cleanup removed
   };
 
   // Retry logic with exponential backoff for lesson generation
@@ -532,8 +421,10 @@ export default function Subjects() {
   // Import the comprehensive content formatter from utils
   // This function is now handled by the imported formatLessonContent utility
 
-  // Send lesson content to generate-video endpoint via proxy
+  // Video generation removed - not implemented yet
   const sendToVisionAPI = async (subject, topic, lessonData) => {
+    // Video generation functionality removed
+    return;
     try {
       console.log("🎬 Sending lesson content to AnimateDiff video generation API...");
 
@@ -542,15 +433,8 @@ export default function Subjects() {
         return;
       }
 
-      // Transform lesson data into the required format with scenes and prompts
-      const transformedContent = transformLessonToVideoFormat(lessonData, subject, topic);
-
-      // Add video style to the content
-      const styledContent = {
-        ...transformedContent,
-        video_style: selectedVideoStyle,
-        style_modifiers: getStyleModifiers(selectedVideoStyle)
-      };
+      // Video generation removed
+      return;
 
       console.log("🎬 Transformed content for video generation:", styledContent);
 
@@ -881,19 +765,19 @@ export default function Subjects() {
 
 
 
-  // Streaming lesson generation function
-  const handleStreamingSubmit = async (e) => {
+  // Regular lesson generation function using backend API
+  const handleGenerateLesson = async (e) => {
     e.preventDefault();
 
     // Prevent submission if already processing
-    if (isButtonDisabled()) {
+    if (isButtonDisabled() || isGeneratingLesson) {
       return;
     }
 
     // Validate form fields
     if (!isFormValid()) {
       toast.error(
-        "Please fill in both Subject and Topic fields before generating a lesson.",
+        t("Please fill in both Subject and Topic fields before generating a lesson."),
         {
           duration: 4000,
           style: {
@@ -912,13 +796,13 @@ export default function Subjects() {
 
     setIsSubmitting(true);
     setShowResults(true);
-    setLessonData({ streaming: true, content: "" }); // Initialize streaming state
+    setLessonData(null); // Clear previous data
 
     // Show loading toast
     toast.loading(
-      `🎓 Generating in-depth lesson content...\n📚 ${trimmedSubject}: ${trimmedTopic}\n⚡ Live streaming enabled`,
+      `🎓 Generating lesson content...\n📚 ${trimmedSubject}: ${trimmedTopic}\n⏱️ Please wait...`,
       {
-        id: "streaming-lesson-generation",
+        id: "lesson-generation",
         duration: Infinity,
         style: {
           background: 'linear-gradient(135deg, rgba(15, 15, 25, 0.95), rgba(25, 25, 35, 0.95))',
@@ -934,101 +818,97 @@ export default function Subjects() {
     );
 
     try {
-      // Determine which API endpoint to use
-      const baseUrl = API_BASE_URL || "http://localhost:8001";
-      const streamUrl = `${baseUrl}/generate_lesson_stream?subject=${encodeURIComponent(trimmedSubject)}&topic=${encodeURIComponent(trimmedTopic)}&include_wikipedia=${includeWikipedia}&use_knowledge_store=${useKnowledgeStore}`;
-
-      console.log("🌊 Starting streaming lesson generation:", streamUrl);
-
-      const response = await fetch(streamUrl);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let accumulatedContent = "";
-
-      // Process the stream
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) {
-          console.log("🏁 Streaming complete");
-          break;
-        }
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.trim()) {
-            // Check for special markers
-            if (line.includes('[STREAM_END]')) {
-              console.log("✅ Stream ended successfully");
-              break;
-            } else if (line.includes('[STREAM_ERROR]')) {
-              throw new Error("Streaming error occurred");
-            } else if (line.startsWith('data: ')) {
-              // Remove 'data: ' prefix
-              const content = line.substring(6);
-
-              // Filter out status messages and only accumulate actual lesson content
-              const isStatusMessage = content.includes('🎓') || content.includes('📚') ||
-                                    content.includes('🔍') || content.includes('✅') ||
-                                    content.includes('⚠️') || content.includes('🌐') ||
-                                    content.includes('🧠') || content.includes('📖') ||
-                                    content.includes('📊') || content.includes('🎯') ||
-                                    content.includes('[END]') || content.includes('[ERROR]') ||
-                                    content.includes('Starting lesson') || content.includes('Gathering educational') ||
-                                    content.includes('Accessing knowledge') || content.includes('Searching Wikipedia') ||
-                                    content.includes('Generating comprehensive') || content.includes('Lesson content ready') ||
-                                    content.includes('Total content:') || content.includes('Sources used:') ||
-                                    content.includes('Lesson generation complete');
-
-              // Only add actual lesson content, not status messages
-              if (!isStatusMessage && content.trim()) {
-                accumulatedContent += content + '\n';
-              }
-
-              // Update the lesson data with accumulated content
-              setLessonData({
-                streaming: true,
-                content: accumulatedContent,
-                subject: trimmedSubject,
-                topic: trimmedTopic,
-                title: `In-Depth Study: ${trimmedTopic} in ${trimmedSubject}`,
-                status: "streaming",
-                knowledge_base_used: useKnowledgeStore,
-                wikipedia_used: includeWikipedia
-              });
-            } else {
-              // Regular content line
-              accumulatedContent += line + '\n';
-              setLessonData(prev => ({
-                ...prev,
-                content: accumulatedContent
-              }));
-            }
+      // Get current language from localStorage
+      const getCurrentLanguage = () => {
+        try {
+          const settings = localStorage.getItem("gurukul_settings");
+          if (settings) {
+            const parsed = JSON.parse(settings);
+            return parsed.language || "english";
           }
+        } catch (error) {
+          console.error("Error reading language from storage:", error);
         }
+        return "english";
+      };
+
+      const currentLanguage = getCurrentLanguage();
+
+      console.log("📚 Calling generate_lesson API with params:", {
+        subject: trimmedSubject,
+        topic: trimmedTopic,
+        include_wikipedia: includeWikipedia,
+        use_knowledge_store: useKnowledgeStore,
+        language: currentLanguage
+      });
+
+      // Call the backend API using RTK Query
+      const result = await triggerGenerateLesson({
+        subject: trimmedSubject,
+        topic: trimmedTopic,
+        include_wikipedia: includeWikipedia,
+        use_knowledge_store: useKnowledgeStore,
+        language: currentLanguage
+      }).unwrap();
+
+      console.log("✅ API Response received:", result);
+      console.log("🎬 RAW API Response - YouTube video check:", {
+        has_youtube_video: !!result.youtube_video,
+        youtube_video: result.youtube_video,
+        youtube_video_type: typeof result.youtube_video,
+        all_result_keys: Object.keys(result)
+      });
+
+      // Check if result has error
+      if (result.error) {
+        throw new Error(result.error);
       }
 
-      // Finalize the lesson data
-      setLessonData(prev => ({
-        ...prev,
+      // Map the API response to lessonData format expected by the UI
+      const mappedLessonData = {
+        title: result.title || `Lesson: ${trimmedTopic}`,
+        level: result.level || "intermediate",
+        explanation: result.text || result.explanation || result.content || "",
+        text: result.text || result.explanation || result.content || "",
+        content: result.text || result.explanation || result.content || "",
+        quiz: Array.isArray(result.quiz) ? result.quiz : [],
+        activity: result.activity || null,
+        question: result.question || null,
+        shloka: result.shloka || null,
+        translation: result.translation || null,
+        subject: result.subject || trimmedSubject,
+        topic: result.topic || trimmedTopic,
+        sources: Array.isArray(result.sources) ? result.sources : [],
+        knowledge_base_used: result.knowledge_base_used || false,
+        wikipedia_used: result.wikipedia_used || false,
+        generated_at: result.generated_at || new Date().toISOString(),
+        status: result.status || "success",
         streaming: false,
-        status: "completed",
-        generated_at: new Date().toISOString()
-      }));
+        // YouTube video data - IMPORTANT: preserve exactly as received, even if null/undefined
+        youtube_video: result.youtube_video !== undefined ? result.youtube_video : null,
+        video_url: result.video_url !== undefined ? result.video_url : null,
+        video_status: result.video_status !== undefined ? result.video_status : "not_found",
+      };
+
+      console.log("✅ Mapped lesson data:", mappedLessonData);
+      console.log("🎬 MAPPED YouTube video data:", {
+        youtube_video: mappedLessonData.youtube_video,
+        has_youtube_video: !!mappedLessonData.youtube_video,
+        is_null: mappedLessonData.youtube_video === null,
+        is_undefined: mappedLessonData.youtube_video === undefined,
+        video_url: mappedLessonData.video_url,
+        video_status: mappedLessonData.video_status
+      });
+
+      // Set the lesson data
+      setLessonData(mappedLessonData);
 
       // Dismiss loading toast and show success
-      toast.dismiss("streaming-lesson-generation");
+      toast.dismiss("lesson-generation");
       toast.success(
-        `🎉 Streaming lesson completed!\n📚 ${trimmedSubject}: ${trimmedTopic}\n✨ In-depth content ready for exploration!`,
+        `🎉 ${t("Lesson generated successfully!")}\n📚 ${trimmedSubject}: ${trimmedTopic}`,
         {
-          duration: 6000,
+          duration: 4000,
           style: {
             background: 'linear-gradient(135deg, rgba(15, 15, 25, 0.95), rgba(25, 25, 35, 0.95))',
             color: '#fff',
@@ -1042,18 +922,34 @@ export default function Subjects() {
         }
       );
 
-      // Trigger TTS for the final content if available
-      if (serviceHealthy && accumulatedContent) {
-        console.log("🔊 Jupiter TTS: Triggering auto-play for streamed content");
-        handleJupiterResponse(accumulatedContent);
+      // Process karma for using subjects/lessons
+      const effectiveUserId = userId || "guest-user";
+      const karmaResult = processSubjectsUsage(effectiveUserId);
+      if (karmaResult) {
+        dispatchKarmaChange(karmaResult);
+        toast.success(`+${karmaResult.change} Karma: ${karmaResult.reason}`, {
+          position: "top-right",
+          duration: 3000,
+        });
+      }
+
+      // Trigger TTS for the content if available
+      if (serviceHealthy && mappedLessonData.content) {
+        console.log("🔊 Jupiter TTS: Triggering auto-play for lesson content");
+        handleJupiterResponse(mappedLessonData.content);
       }
 
     } catch (error) {
-      console.error("❌ Streaming lesson generation failed:", error);
+      console.error("❌ Lesson generation failed:", error);
+      console.error("❌ Error details:", {
+        message: error.message,
+        data: error.data,
+        status: error.status
+      });
 
-      toast.dismiss("streaming-lesson-generation");
+      toast.dismiss("lesson-generation");
       toast.error(
-        `⚠️ Streaming lesson generation failed\n🔍 Error: ${error.message}\n💡 Try: Check connection or use regular generation`,
+        `⚠️ Failed to generate lesson\n🔍 Error: ${error.message || error.data?.error || "Unknown error"}\n💡 Please try again`,
         {
           duration: 8000,
           style: {
@@ -1069,7 +965,7 @@ export default function Subjects() {
       );
 
       setLessonData({
-        error: error.message,
+        error: error.message || error.data?.error || "Failed to generate lesson",
         subject: trimmedSubject,
         topic: trimmedTopic,
         status: "error"
@@ -1078,6 +974,7 @@ export default function Subjects() {
       setIsSubmitting(false);
     }
   };
+
 
   return (
     <GlassContainer>
@@ -1092,7 +989,7 @@ export default function Subjects() {
                   fontFamily: "Nunito, sans-serif",
                 }}
               >
-                Subject Explorer
+                {t("Subject Explorer")}
               </h2>
 
               {/* Orchestration Status */}
@@ -1100,7 +997,7 @@ export default function Subjects() {
                 {integrationStatus?.integration_status?.overall_valid && (
                   <div className="flex items-center space-x-2 bg-green-500/20 px-3 py-1 rounded-full border border-green-500/40">
                     <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                    <span className="text-green-300 text-sm font-medium">AI Enhanced</span>
+                    <span className="text-green-300 text-sm font-medium">{t("AI Enhanced")}</span>
                   </div>
                 )}
               </div>
@@ -1112,22 +1009,9 @@ export default function Subjects() {
                 fontFamily: "Inter, Poppins, sans-serif",
               }}
             >
-              Select a subject and enter a topic to begin your learning journey
+              {t("Select a subject and enter a topic to begin your learning journey")}
             </p>
 
-            {/* User Progress Dashboard */}
-            {showProgressDashboard && userId && userId !== "guest-user" && (
-              <div className="mb-10">
-                <UserProgressDashboard
-                  userProgress={formatUserProgressData(userProgress)}
-                  userAnalytics={userAnalytics}
-                  onTriggerIntervention={handleTriggerIntervention}
-                  isLoadingProgress={isLoadingProgress}
-                  isLoadingAnalytics={isLoadingAnalytics}
-                  isTriggeringIntervention={isTriggeringIntervention}
-                />
-              </div>
-            )}
             <div
               className="space-y-8 max-w-5xl mx-auto bg-white/10 p-10 rounded-xl backdrop-blur-md border border-white/20 shadow-lg"
             >
@@ -1135,12 +1019,12 @@ export default function Subjects() {
                 <label className={`block mb-3 font-medium text-lg transition-opacity duration-300 ${
                   isButtonDisabled() ? 'text-white/50' : 'text-white/90'
                 }`}>
-                  Subject:
+                  {t("Subject")}:
                 </label>
                 <div className="relative">
                   <GlassInput
                     type="text"
-                    placeholder="Type any subject (e.g. Mathematics, Physics, History)"
+                    placeholder={t("Type any subject (e.g. Mathematics, Physics, History)")}
                     value={selectedSubject}
                     onChange={(e) => setSelectedSubject(e.target.value)}
                     icon={Book}
@@ -1155,11 +1039,11 @@ export default function Subjects() {
                 <label className={`block mb-3 font-medium text-lg transition-opacity duration-300 ${
                   isButtonDisabled() ? 'text-white/50' : 'text-white/90'
                 }`}>
-                  Topic:
+                  {t("Topic")}:
                 </label>
                 <GlassInput
                   type="text"
-                  placeholder="Enter a topic to explore"
+                  placeholder={t("Enter a topic to explore")}
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
                   icon={BookOpen}
@@ -1174,8 +1058,6 @@ export default function Subjects() {
     isButtonDisabled() ? "opacity-60" : ""
   }`}
 >
-  {/* First Row - Knowledge Store + Progress */}
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
     {/* Use Knowledge Store Toggle */}
     <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/20">
       <div>
@@ -1184,14 +1066,14 @@ export default function Subjects() {
             isButtonDisabled() ? "text-white/50" : "text-white/90"
           }`}
         >
-          Use Knowledge Store
+          {t("Use Knowledge Store")}
         </label>
         <p
           className={`text-sm mt-1 transition-opacity duration-300 ${
             isButtonDisabled() ? "text-white/40" : "text-white/60"
           }`}
         >
-          Access curated knowledge database
+          {t("Access curated knowledge database")}
         </p>
       </div>
       <button
@@ -1214,168 +1096,35 @@ export default function Subjects() {
       </button>
     </div>
 
-    {/* View Progress Button */}
-    {userId && userId !== "guest-user" && (
-      <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/20">
-        <div>
-          <label
-            className={`font-medium text-lg block transition-opacity duration-300 ${
-              isButtonDisabled() ? "text-white/50" : "text-white/90"
-            }`}
-          >
-            View Progress
-          </label>
-          <p
-            className={`text-sm mt-1 transition-opacity duration-300 ${
-              isButtonDisabled() ? "text-white/40" : "text-white/60"
-            }`}
-          >
-            Show learning progress dashboard
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowProgressDashboard(!showProgressDashboard)}
-          disabled={isButtonDisabled()}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-            showProgressDashboard
-              ? "bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/40 text-amber-300 hover:text-amber-200"
-              : "bg-gray-500/20 hover:bg-amber-500/20 border-gray-500/40 hover:border-amber-500/40 text-gray-300 hover:text-amber-300"
-          } ${
-            isButtonDisabled()
-              ? "opacity-50 cursor-not-allowed"
-              : "cursor-pointer"
-          }`}
-        >
-          <BarChart3 className="w-4 h-4" />
-          <span className="text-sm font-medium">
-            {showProgressDashboard ? "Hide" : "Show"}
-          </span>
-        </button>
-      </div>
-    )}
-  </div>
-
-  {/* Video Style Selection */}
-  <div className="mt-6">
-    <div className="p-4 bg-white/5 rounded-xl border border-white/20">
-      <div className="mb-4">
-        <label
-          className={`font-medium text-lg block transition-opacity duration-300 ${
-            isButtonDisabled() ? "text-white/50" : "text-white/90"
-          }`}
-        >
-          Video Generation Style
-        </label>
-        <p
-          className={`text-sm mt-1 transition-opacity duration-300 ${
-            isButtonDisabled() ? "text-white/40" : "text-white/60"
-          }`}
-        >
-          Choose the visual style for generated videos
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {/* Realistic Style */}
-        <button
-          type="button"
-          onClick={() => setSelectedVideoStyle("realistic")}
-          disabled={isButtonDisabled()}
-          className={`p-3 rounded-lg border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-            selectedVideoStyle === "realistic"
-              ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
-              : "bg-gray-500/20 hover:bg-amber-500/10 border-gray-500/40 hover:border-amber-500/30 text-gray-300 hover:text-amber-300"
-          } ${
-            isButtonDisabled()
-              ? "opacity-50 cursor-not-allowed"
-              : "cursor-pointer"
-          }`}
-        >
-          <div className="text-center">
-            <div className="text-lg font-medium">📷</div>
-            <div className="text-sm font-medium mt-1">Realistic</div>
-            <div className="text-xs mt-1 opacity-75">Photorealistic style</div>
-          </div>
-        </button>
-
-        {/* Artistic Style */}
-        <button
-          type="button"
-          onClick={() => setSelectedVideoStyle("artistic")}
-          disabled={isButtonDisabled()}
-          className={`p-3 rounded-lg border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-            selectedVideoStyle === "artistic"
-              ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
-              : "bg-gray-500/20 hover:bg-amber-500/10 border-gray-500/40 hover:border-amber-500/30 text-gray-300 hover:text-amber-300"
-          } ${
-            isButtonDisabled()
-              ? "opacity-50 cursor-not-allowed"
-              : "cursor-pointer"
-          }`}
-        >
-          <div className="text-center">
-            <div className="text-lg font-medium">🎨</div>
-            <div className="text-sm font-medium mt-1">Artistic</div>
-            <div className="text-xs mt-1 opacity-75">Painterly style</div>
-          </div>
-        </button>
-
-        {/* Anime Style */}
-        <button
-          type="button"
-          onClick={() => setSelectedVideoStyle("anime")}
-          disabled={isButtonDisabled()}
-          className={`p-3 rounded-lg border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-            selectedVideoStyle === "anime"
-              ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
-              : "bg-gray-500/20 hover:bg-amber-500/10 border-gray-500/40 hover:border-amber-500/30 text-gray-300 hover:text-amber-300"
-          } ${
-            isButtonDisabled()
-              ? "opacity-50 cursor-not-allowed"
-              : "cursor-pointer"
-          }`}
-        >
-          <div className="text-center">
-            <div className="text-lg font-medium">🎌</div>
-            <div className="text-sm font-medium mt-1">Anime</div>
-            <div className="text-xs mt-1 opacity-75">Japanese animation</div>
-          </div>
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-
               <div className="flex justify-center mt-10 relative">
-                {/* Streaming Generation Button */}
+                {/* Regular Generation Button (using backend API) */}
                 <div className="relative">
                   <GlassButton
                     type="button"
-                    onClick={handleStreamingSubmit}
+                    onClick={handleGenerateLesson}
                     icon={BookOpen}
                     variant="primary"
                     className={`px-8 py-4 text-lg font-medium transition-all duration-300 flex items-center justify-center ${
                       getButtonVisualState() === "invalid" ? "opacity-75" : ""
                     } ${
-                      getButtonVisualState() === "disabled"
+                      getButtonVisualState() === "disabled" || isGeneratingLesson
                         ? "cursor-not-allowed"
                         : ""
                     }`}
-                    disabled={isButtonDisabled()}
+                    disabled={isButtonDisabled() || isGeneratingLesson}
                     aria-label={
-                      isButtonDisabled()
-                        ? "Generating in-depth lesson content with live streaming..."
+                      isGeneratingLesson
+                        ? t("Generating lesson content...")
                         : !isFormValid()
-                        ? "Please fill in both Subject and Topic fields for in-depth exploration"
-                        : "Generate in-depth lesson with live streaming"
+                        ? t("Please fill in both Subject and Topic fields")
+                        : t("Generate lesson")
                     }
                   >
-                    {isButtonDisabled() ? "Streaming..." : "In-Depth Stream"}
+                    {isGeneratingLesson ? t("Generating...") : t("Generate Lesson")}
                   </GlassButton>
                 </div>
               </div>
+             </div>
             </div>
           </>
         )}
@@ -1392,18 +1141,18 @@ export default function Subjects() {
 
               <div className="text-center">
                 <p className="text-white/90 text-xl font-medium mb-3">
-                  📚 Generating lesson content for "{selectedSubject.trim()}: {topic.trim()}"
+                  📚 {t("Generating lesson content for")} "{selectedSubject.trim()}: {topic.trim()}"
                 </p>
                 <p className="text-amber-300 text-lg mb-4">
-                  ⏱️ This will take approximately 2 minutes. Please be patient.
+                  ⏱️ {t("This will take approximately 2 minutes. Please be patient.")}
                 </p>
                 <div className="bg-gradient-to-r from-orange-900/20 to-amber-900/20 rounded-lg p-4 border border-orange-500/30">
                   <p className="text-orange-200 text-sm">
-                    🤖 AI is analyzing your topic and creating personalized content
+                    🤖 {t("AI is analyzing your topic and creating personalized content")}
                     <br />
-                    ✨ Including explanations, activities, and questions
+                    ✨ {t("Including explanations, activities, and questions")}
                     <br />
-                    📖 Integrating knowledge from multiple sources
+                    📖 {t("Integrating knowledge from multiple sources")}
                   </p>
                 </div>
               </div>
@@ -1416,13 +1165,12 @@ export default function Subjects() {
 
             {isLoadingData || isSubmitting ? (
               <div className="text-center py-8">
-                <p className="text-white/70">Loading...</p>
+                <p className="text-white/70">{t("Loading...")}</p>
               </div>
             ) : isErrorData ? (
               <div className="text-red-400 text-center my-8 p-6 bg-white/5 rounded-xl border border-red-500/20">
                 <p className="font-semibold mb-4 text-xl">
-                  Sorry, the service is currently unavailable. Please try again
-                  later.
+                  {t("Sorry, the service is currently unavailable. Please try again later.")}
                 </p>
                 <div className="mt-8">
                   <GlassButton
@@ -1430,7 +1178,7 @@ export default function Subjects() {
                     variant="secondary"
                     className="px-6 py-3 text-lg"
                   >
-                    Try Again
+                    {t("Try Again")}
                   </GlassButton>
                 </div>
               </div>
@@ -1467,7 +1215,7 @@ export default function Subjects() {
                         <div className="bg-white/10 p-4 rounded-lg">
                           <p className="text-white/90 text-base text-center">
                             <span className="text-amber-300 font-medium">
-                              Translation:
+                              {t("Translation")}:
                             </span>{" "}
                             {subjectData.translation}
                           </p>
@@ -1500,7 +1248,7 @@ export default function Subjects() {
                               <span className={`font-medium ${
                                 isEnhanced ? 'text-green-300' : 'text-blue-300'
                               }`}>
-                                {isEnhanced ? '🚀 Enhanced Mode' : '📚 Basic Mode'}
+                                {isEnhanced ? `🚀 ${t("Enhanced Mode")}` : `📚 ${t("Basic Mode")}`}
                               </span>
                             </div>
                             <div className="flex items-center space-x-3 text-sm">
@@ -1510,7 +1258,7 @@ export default function Subjects() {
                                   ? 'bg-purple-500/20 text-purple-200'
                                   : 'bg-gray-500/20 text-gray-200'
                               }`}>
-                                📝 {isLongContent ? 'Comprehensive' : 'Concise'} ({contentLength} chars)
+                                📝 {isLongContent ? t("Comprehensive") : t("Concise")} ({contentLength} {t("chars")})
                               </span>
 
                               {/* Wikipedia Indicator */}
@@ -1519,13 +1267,13 @@ export default function Subjects() {
                                   ? 'bg-orange-500/20 text-orange-200'
                                   : 'bg-gray-500/20 text-gray-200'
                               }`}>
-                                {includeWikipedia ? '🌐 Wikipedia' : '🧠 Pure AI'}
+                                {includeWikipedia ? `🌐 ${t("Wikipedia")}` : `🧠 ${t("Pure AI")}`}
                               </span>
 
                               {/* Content Type */}
                               {contentType !== 'standard' && (
                                 <span className="bg-indigo-500/20 text-indigo-200 px-2 py-1 rounded-full">
-                                  {contentType === 'concise' ? '⚡ Concise' : '📖 Basic'}
+                                  {contentType === 'concise' ? `⚡ ${t("Concise")}` : `📖 ${t("Basic")}`}
                                 </span>
                               )}
                             </div>
@@ -1537,16 +1285,16 @@ export default function Subjects() {
                           <div className="bg-gradient-to-r from-amber-900/20 to-yellow-900/20 p-3 rounded-xl border border-amber-500/30">
                             <div className="flex items-center space-x-4 text-sm text-amber-200">
                               {formattedLesson.ragEnhanced && (
-                                <span className="bg-green-500/20 px-2 py-1 rounded-full">📚 RAG Enhanced</span>
+                                <span className="bg-green-500/20 px-2 py-1 rounded-full">📚 {t("RAG Enhanced")}</span>
                               )}
                               {formattedLesson.triggersDetected > 0 && (
                                 <span className="bg-amber-500/20 px-2 py-1 rounded-full">
-                                  ⚡ {formattedLesson.triggersDetected} Triggers
+                                  ⚡ {formattedLesson.triggersDetected} {t("Triggers")}
                                 </span>
                               )}
                               {formattedLesson.sourceDocumentsCount > 0 && (
                                 <span className="bg-blue-500/20 px-2 py-1 rounded-full">
-                                  📖 {formattedLesson.sourceDocumentsCount} Sources
+                                  📖 {formattedLesson.sourceDocumentsCount} {t("Sources")}
                                 </span>
                               )}
                             </div>
@@ -1571,10 +1319,10 @@ export default function Subjects() {
                             </div>
                             <div>
                               <h3 className="text-2xl font-bold text-white mb-1">
-                                {subjectData?.streaming ? "Live Lesson Content" : "Lesson Content"}
+                                {subjectData?.streaming ? t("Live Lesson Content") : t("Lesson Content")}
                               </h3>
                               <p className="text-white/60 text-sm">
-                                {subjectData?.streaming ? "Content is being generated in real-time" : "Comprehensive lesson explanation"}
+                                {subjectData?.streaming ? t("Content is being generated in real-time") : t("Comprehensive lesson explanation")}
                               </p>
                             </div>
                           </div>
@@ -1584,11 +1332,11 @@ export default function Subjects() {
                             {subjectData?.streaming && (
                               <div className="flex items-center space-x-2 bg-gradient-to-r from-green-500/20 to-emerald-500/20 px-4 py-2 rounded-full border border-green-500/30">
                                 <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                                <span className="text-green-300 text-sm font-medium">LIVE</span>
+                                <span className="text-green-300 text-sm font-medium">{t("LIVE")}</span>
                               </div>
                             )}
                             <div className="bg-white/10 px-3 py-1 rounded-full">
-                              <span className="text-white/70 text-xs">📚 Educational Content</span>
+                              <span className="text-white/70 text-xs">📚 {t("Educational Content")}</span>
                             </div>
                           </div>
                         </div>
@@ -1648,13 +1396,107 @@ export default function Subjects() {
                             />
                           ) : (
                             <div className="text-white/70 text-center py-8">
-                              <p>No content available to display.</p>
+                              <p>{t("No content available to display.")}</p>
                             </div>
                           )}
                         </div>
                       </div>
                     </div>
                   )}
+
+                  {/* YouTube Video Display - Appears below generated text */}
+                  {(() => {
+                    // More robust check for YouTube video
+                    const youtubeVideo = subjectData?.youtube_video;
+                    const hasYoutubeVideo = youtubeVideo && 
+                                           typeof youtubeVideo === 'object' && 
+                                           youtubeVideo !== null &&
+                                           (youtubeVideo.embed_url || youtubeVideo.video_id);
+                    
+                    console.log("🎬 DEBUG - Checking YouTube video:", {
+                      has_subjectData: !!subjectData,
+                      youtube_video: youtubeVideo,
+                      youtube_video_type: typeof youtubeVideo,
+                      is_null: youtubeVideo === null,
+                      is_undefined: youtubeVideo === undefined,
+                      is_object: typeof youtubeVideo === 'object',
+                      has_embed_url: !!youtubeVideo?.embed_url,
+                      has_video_id: !!youtubeVideo?.video_id,
+                      will_render: hasYoutubeVideo,
+                      all_keys: subjectData ? Object.keys(subjectData) : [],
+                      youtube_video_keys: youtubeVideo ? Object.keys(youtubeVideo) : []
+                    });
+                    
+                    if (!hasYoutubeVideo) {
+                      return null;
+                    }
+                    
+                    // Build embed URL if not present but video_id is available
+                    const embedUrl = youtubeVideo.embed_url || 
+                                    (youtubeVideo.video_id ? `https://www.youtube.com/embed/${youtubeVideo.video_id}` : null);
+                    
+                    if (!embedUrl) {
+                      console.warn("⚠️ YouTube video found but no embed URL available");
+                      return null;
+                    }
+                    
+                    return (
+                      <div className="relative mb-8 mt-8">
+                        <div className="mb-6">
+                          <div className="flex items-center space-x-4">
+                            <div className="relative">
+                              <div className="w-12 h-12 bg-gradient-to-br from-red-400 via-red-500 to-red-600 rounded-2xl flex items-center justify-center shadow-xl transform rotate-3">
+                                <span className="text-white font-bold text-lg transform -rotate-3">▶️</span>
+                              </div>
+                              <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-br from-red-300 to-red-400 rounded-full animate-pulse"></div>
+                            </div>
+                            <div>
+                              <h3 className="text-2xl font-bold text-white mb-1">
+                                {t("Related Video")}
+                              </h3>
+                              <p className="text-white/60 text-sm">
+                                {youtubeVideo.title || t("Watch this video to learn more")}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="relative bg-gradient-to-br from-white/5 to-white/10 backdrop-blur-sm rounded-3xl p-6 border border-white/20 shadow-2xl overflow-hidden">
+                          <div className="relative w-full" style={{ paddingBottom: "56.25%" }}> {/* 16:9 aspect ratio */}
+                            <iframe
+                              src={embedUrl}
+                              title={youtubeVideo.title || "YouTube video player"}
+                              frameBorder="0"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                              className="absolute top-0 left-0 w-full h-full rounded-xl"
+                              style={{ backgroundColor: "#000" }}
+                            ></iframe>
+                          </div>
+                          {youtubeVideo.channel_title && (
+                            <div className="mt-4 flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center">
+                                  <span className="text-white text-xs">📺</span>
+                                </div>
+                                <div>
+                                  <p className="text-white/90 font-medium">{youtubeVideo.channel_title}</p>
+                                  <a
+                                    href={youtubeVideo.video_url || `https://www.youtube.com/watch?v=${youtubeVideo.video_id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-red-400 hover:text-red-300 text-sm transition-colors"
+                                  >
+                                    {t("Watch on YouTube")} →
+                                  </a>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Activity - Enhanced User-Friendly Design */}
                   {subjectData?.activity && (
@@ -1669,8 +1511,8 @@ export default function Subjects() {
                             <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-br from-purple-300 to-purple-400 rounded-full animate-pulse"></div>
                           </div>
                           <div>
-                            <h3 className="text-2xl font-bold text-white mb-1">Interactive Activity</h3>
-                            <p className="text-white/60 text-sm">Hands-on learning experience</p>
+                            <h3 className="text-2xl font-bold text-white mb-1">{t("Interactive Activity")}</h3>
+                            <p className="text-white/60 text-sm">{t("Hands-on learning experience")}</p>
                           </div>
                         </div>
                       </div>
@@ -1695,7 +1537,7 @@ export default function Subjects() {
                           {/* Action Hint */}
                           <div className="mt-4 flex items-center justify-center">
                             <div className="bg-gradient-to-r from-indigo-500/20 to-purple-500/20 px-4 py-2 rounded-full border border-indigo-500/30">
-                              <span className="text-indigo-300 text-sm font-medium">💡 Try this activity to reinforce your learning</span>
+                              <span className="text-indigo-300 text-sm font-medium">💡 {t("Try this activity to reinforce your learning")}</span>
                             </div>
                           </div>
                         </div>
@@ -1716,8 +1558,8 @@ export default function Subjects() {
                             <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-br from-yellow-300 to-orange-400 rounded-full animate-pulse"></div>
                           </div>
                           <div>
-                            <h3 className="text-2xl font-bold text-white mb-1">Reflection Question</h3>
-                            <p className="text-white/60 text-sm">Think deeply about this concept</p>
+                            <h3 className="text-2xl font-bold text-white mb-1">{t("Reflection Question")}</h3>
+                            <p className="text-white/60 text-sm">{t("Think deeply about this concept")}</p>
                           </div>
                         </div>
                       </div>
@@ -1742,7 +1584,7 @@ export default function Subjects() {
                           {/* Thinking Prompt */}
                           <div className="mt-4 flex items-center justify-center">
                             <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 px-4 py-2 rounded-full border border-amber-500/30">
-                              <span className="text-amber-300 text-sm font-medium">🤔 Take a moment to reflect on this</span>
+                              <span className="text-amber-300 text-sm font-medium">🤔 {t("Take a moment to reflect on this")}</span>
                             </div>
                           </div>
                         </div>
@@ -1760,8 +1602,8 @@ export default function Subjects() {
                               <span className="text-white text-sm">📚</span>
                             </div>
                             <div>
-                              <h3 className="text-xl font-bold text-white">Legacy Content</h3>
-                              <p className="text-white/60 text-sm">Formatted lesson content</p>
+                              <h3 className="text-xl font-bold text-white">{t("Legacy Content")}</h3>
+                              <p className="text-white/60 text-sm">{t("Formatted lesson content")}</p>
                             </div>
                           </div>
                         </div>
@@ -1783,8 +1625,8 @@ export default function Subjects() {
                             <span className="text-white text-sm">🔧</span>
                           </div>
                           <div>
-                            <h3 className="text-xl font-bold text-white">Debug Information</h3>
-                            <p className="text-white/60 text-sm">Raw lesson data for troubleshooting</p>
+                            <h3 className="text-xl font-bold text-white">{t("Debug Information")}</h3>
+                            <p className="text-white/60 text-sm">{t("Raw lesson data for troubleshooting")}</p>
                           </div>
                         </div>
                       </div>
@@ -1797,6 +1639,14 @@ export default function Subjects() {
                   )}
                 </div>
 
+                {/* YouTube Recommendations Container - Shows after lesson is generated */}
+                <div className="mt-12">
+                  <YouTubeRecommendations 
+                    subject={subjectData?.subject || selectedSubject} 
+                    topic={subjectData?.topic || topic} 
+                  />
+                </div>
+
                 {/* Action buttons */}
                 <div className="flex justify-center items-center gap-6 mt-12">
                   {/* New Search Button */}
@@ -1805,7 +1655,7 @@ export default function Subjects() {
                     variant="secondary"
                     className="px-6 py-3 text-lg font-medium shadow-lg hover:shadow-xl transition-all"
                   >
-                    New Search
+                    {t("New Search")}
                   </GlassButton>
                 </div>
               </div>
@@ -1821,9 +1671,9 @@ export default function Subjects() {
 
                 {/* Message */}
                 <div className="mb-8">
-                  <h3 className="text-2xl font-bold text-white mb-3">No Content Available</h3>
+                  <h3 className="text-2xl font-bold text-white mb-3">{t("No Content Available")}</h3>
                   <p className="text-white/70 text-lg leading-relaxed max-w-md mx-auto">
-                    We couldn't find any content for this topic. Please try searching for a different subject or check your connection.
+                    {t("We couldn't find any content for this topic. Please try searching for a different subject or check your connection.")}
                   </p>
                 </div>
 
@@ -1835,7 +1685,7 @@ export default function Subjects() {
                 >
                   <span className="flex items-center space-x-2">
                     <span>🔍</span>
-                    <span>Try Again</span>
+                    <span>{t("Try Again")}</span>
                   </span>
                 </GlassButton>
               </div>
@@ -1843,8 +1693,8 @@ export default function Subjects() {
           </div>
         )}
 
-        {/* Original Video Player Section - Only show when not in sidebar mode */}
-        {generatedVideo && !showVideoInSidebar && (
+        {/* Original Video Player Section - Removed */}
+        {false && (
           <div className="mt-8 bg-white/20 rounded-xl p-8 backdrop-blur-md border border-white/30 shadow-xl">
             <div className="text-center mb-6">
               <h3 className="text-3xl font-bold text-white mb-2">
@@ -1879,25 +1729,25 @@ export default function Subjects() {
                   }}
                 >
                   <p className="text-white">
-                    Your browser doesn't support video playback.
+                    {t("Your browser doesn't support video playback.")}
                     <a
                       href={generatedVideo.url}
                       download="generated_video.mp4"
                       className="text-orange-400 hover:text-orange-300 underline ml-1"
                     >
-                      Download the video instead
+                      {t("Download the video instead")}
                     </a>
                   </p>
                 </video>
 
                 {/* Debug info */}
                 <div className="mt-4 p-3 bg-gray-800/50 rounded-lg text-xs text-white/70">
-                  <p><strong>Debug Info:</strong></p>
+                  <p><strong>{t("Debug Info")}:</strong></p>
                   <p>URL: {generatedVideo.url}</p>
-                  <p>Content Type: {generatedVideo.contentType}</p>
-                  <p>Size: {generatedVideo.size} bytes</p>
-                  <p>URL Valid: {generatedVideo.url ? 'Yes' : 'No'}</p>
-                  <p>URL Type: {generatedVideo.url?.startsWith('blob:') ? 'Blob URL' : 'Regular URL'}</p>
+                  <p>{t("Content Type")}: {generatedVideo.contentType}</p>
+                  <p>{t("Size")}: {generatedVideo.size} {t("bytes")}</p>
+                  <p>{t("URL Valid")}: {generatedVideo.url ? t('Yes') : t('No')}</p>
+                  <p>{t("URL Type")}: {generatedVideo.url?.startsWith('blob:') ? t('Blob URL') : t('Regular URL')}</p>
                 </div>
               </div>
             </div>
@@ -1908,7 +1758,7 @@ export default function Subjects() {
                 download={`${generatedVideo.subject}_${generatedVideo.topic}_video.mp4`}
                 className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-orange-600 to-amber-600 text-white font-medium rounded-lg hover:from-orange-700 hover:to-amber-700 transition-all duration-300 shadow-lg hover:shadow-xl"
               >
-                📥 Download Video
+                📥 {t("Download Video")}
               </a>
 
               <button
@@ -1925,14 +1775,14 @@ export default function Subjects() {
                 }}
                 className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-medium rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl"
               >
-                🔄 Test Video
+                🔄 {t("Test Video")}
               </button>
 
               <button
                 onClick={hideVideo}
                 className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-gray-600 to-gray-700 text-white font-medium rounded-lg hover:from-gray-700 hover:to-gray-800 transition-all duration-300 shadow-lg hover:shadow-xl"
               >
-                ✕ Close Video
+                ✕ {t("Close Video")}
               </button>
             </div>
           </div>

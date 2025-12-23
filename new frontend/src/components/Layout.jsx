@@ -95,6 +95,7 @@ function LayoutContent({ children }) {
               className={`flex-1 md:overflow-hidden overflow-y-auto ${
                 sidebarCollapsed ? "w-full px-0 py-2" : "md:p-2 p-0"
               }`}
+              style={{ paddingTop: isHome ? "0px" : "90px" }}
             >
               <div className="w-full h-full main-content">{children}</div>
             </div>

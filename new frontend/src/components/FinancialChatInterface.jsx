@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   MessageSquare,
   Send,
@@ -26,6 +27,7 @@ const FinancialChatInterface = ({
   userId,
   className = "" 
 }) => {
+  const { t } = useTranslation();
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -499,7 +501,7 @@ const FinancialChatInterface = ({
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask about your finances..."
+              placeholder={t("Ask about your finances...")}
               className="w-full bg-blue-600/20 border border-blue-500/40 rounded-lg py-3 px-4 pr-12 text-white text-base resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/60"
               rows="1"
               style={{ minHeight: "48px", maxHeight: "120px" }}

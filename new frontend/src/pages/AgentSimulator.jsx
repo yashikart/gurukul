@@ -3,6 +3,7 @@ import { useSelector } from "react-redux";
 import GlassContainer from "../components/GlassContainer";
 import { toast } from "react-hot-toast";
 import gsap from "gsap";
+import { useTranslation } from "react-i18next";
 import "../styles/agentDashboard.css";
 import "../styles/skewFill.css";
 import "../styles/pdfUpload.css";
@@ -21,21 +22,22 @@ import {
 import {
   useCreateLessonMutation,
 } from "../api/subjectsApiSlice";
-import FinancialChatInterface from "../components/FinancialChatInterface";
 import {
   useGenerateEnhancedLessonMutation,
   useGetIntegrationStatusQuery,
   formatEnhancedLessonData,
+  useAskEdumentorMutation,
 } from "../api/orchestrationApiSlice";
 import {
   useStartFinancialSimulationMutation,
   useLazyGetSimulationStatusQuery,
   useLazyGetSimulationResultsByTaskIdQuery,
+  useCreateFinancialForecastMutation,
 } from "../api/financialApiSlice";
 import { selectUser, selectUserId } from "../store/authSlice";
 import { selectAudioEnabled, selectAudioVolume } from "../store/settingsSlice";
 import agentLogsService from "../services/agentLogsService";
-import { API_BASE_URL } from "../config";
+import { API_BASE_URL, CHAT_API_BASE_URL, WELLNESS_API_BASE_URL } from "../config";
 import {
   Play,
   Pause,
@@ -74,6 +76,7 @@ const generateUniqueId = () => {
 };
 
 export default function AgentSimulator() {
+  const { t, i18n } = useTranslation();
   const user = useSelector(selectUser);
   const userId = useSelector(selectUserId) || "guest-user";
   const audioEnabled = useSelector(selectAudioEnabled);
@@ -96,17 +99,27 @@ export default function AgentSimulator() {
   const [getSimulationStatus] = useLazyGetSimulationStatusQuery();
   const [getSimulationResultsByTaskId] =
     useLazyGetSimulationResultsByTaskIdQuery();
+  const [createFinancialForecast] = useCreateFinancialForecastMutation();
 
   // EduMentor API mutations and queries
   const [createLesson] = useCreateLessonMutation();
   const [generateEnhancedLesson] = useGenerateEnhancedLessonMutation();
+  const [askEdumentor] = useAskEdumentorMutation();
   const { data: integrationStatus } = useGetIntegrationStatusQuery();
 
-  // Wellness Bot state
+  // Wellness Bot state - converted to profile structure like EduMentor
+  const [wellnessProfile, setWellnessProfile] = useState({
+    wellnessType: "emotional", // "emotional" or "financial"
+    moodScore: 5,
+    stressLevel: 3,
+    wellnessGoals: [],
+    preferredActivities: [],
+    stressTriggers: [],
+    copingStrategies: [],
+  });
+  
+  // Legacy wellness state (kept for backward compatibility if needed)
   const [wellnessQuery, setWellnessQuery] = useState("");
-  const [wellnessType, setWellnessType] = useState("emotional"); // "emotional" or "financial"
-  const [moodScore, setMoodScore] = useState(5);
-  const [stressLevel, setStressLevel] = useState(3);
   const [isWellnessLoading, setIsWellnessLoading] = useState(false);
   const [wellnessResponse, setWellnessResponse] = useState(null);
 
@@ -201,7 +214,7 @@ export default function AgentSimulator() {
 
           {Array.isArray(instructions) && instructions.length > 0 && (
             <div>
-              <p className="text-white/80 font-medium">Instructions:</p>
+              <p className="text-white/80 font-medium">{t("Instructions")}:</p>
               <ol className="list-decimal list-inside text-white/90 space-y-1 mt-1">
                 {instructions.map((ins, idx) => (
                   <li key={idx}>{ins}</li>
@@ -215,7 +228,7 @@ export default function AgentSimulator() {
 
           {Array.isArray(steps) && steps.length > 0 && (
             <div>
-              <p className="text-white/80 font-medium">Steps:</p>
+              <p className="text-white/80 font-medium">{t("Steps")}:</p>
               <ol className="list-decimal list-inside text-white/90 space-y-1 mt-1">
                 {steps.map((s, idx) => (
                   <li key={idx}>{s}</li>
@@ -226,7 +239,7 @@ export default function AgentSimulator() {
 
           {Array.isArray(materials_needed) && materials_needed.length > 0 && (
             <div>
-              <p className="text-white/80 font-medium">Materials Needed:</p>
+              <p className="text-white/80 font-medium">{t("Materials Needed")}:</p>
               <ul className="list-disc list-inside text-white/90 space-y-1 mt-1">
                 {materials_needed.map((m, idx) => (
                   <li key={idx}>{m}</li>
@@ -236,7 +249,7 @@ export default function AgentSimulator() {
           )}
           {Array.isArray(materials) && materials.length > 0 && (
             <div>
-              <p className="text-white/80 font-medium">Materials:</p>
+              <p className="text-white/80 font-medium">{t("Materials")}:</p>
               <ul className="list-disc list-inside text-white/90 space-y-1 mt-1">
                 {materials.map((m, idx) => (
                   <li key={idx}>{m}</li>
@@ -329,18 +342,18 @@ export default function AgentSimulator() {
 
     // Validate file type
     if (file.type !== "application/pdf") {
-      toast.error("Please select a PDF file");
+      toast.error(t("Please select a PDF file"));
       return;
     }
 
     // Validate file size (10MB max)
     if (file.size > 10 * 1024 * 1024) {
-      toast.error("File size should be less than 10MB");
+      toast.error(t("File size should be less than 10MB"));
       return;
     }
 
     // Show loading toast
-    const loadingToast = toast.loading(`Uploading ${file.name}...`);
+    const loadingToast = toast.loading(t("Uploading") + ` ${file.name}...`);
 
     try {
       // Get the user ID from Redux store
@@ -357,7 +370,7 @@ export default function AgentSimulator() {
 
       // Dismiss loading toast and show success
       toast.dismiss(loadingToast);
-      toast.success(`${file.name} uploaded successfully`, {
+      toast.success(`${file.name} ${t("uploaded successfully")}`, {
         icon: "📄",
         duration: 3000,
       });
@@ -417,7 +430,7 @@ export default function AgentSimulator() {
 
       // Show success toast
       toast.dismiss(loadingToast);
-      toast.success("PDF removed successfully", {
+      toast.success(t("PDF removed successfully"), {
         icon: "🗑️",
         duration: 2000,
       });
@@ -434,7 +447,7 @@ export default function AgentSimulator() {
       // Show error toast
       toast.dismiss(loadingToast);
       console.error("Error notifying PDF removal:", error);
-      toast.success("PDF removed from chat");
+      toast.success(t("PDF removed from chat"));
     }
   };
 
@@ -633,6 +646,14 @@ export default function AgentSimulator() {
     }
   };
 
+  // Handle WellnessBot profile changes
+  const handleWellnessProfileChange = (field, value) => {
+    setWellnessProfile((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
   // Generate lesson using the same logic as Subjects.jsx
   const generateEduMentorLesson = async () => {
     const trimmedSubject = eduMentorProfile.selectedSubject.trim();
@@ -640,7 +661,7 @@ export default function AgentSimulator() {
 
     // Validate inputs
     if (!trimmedSubject || !trimmedTopic) {
-      toast.error("Please provide both subject and topic for lesson generation");
+      toast.error(t("Please provide both subject and topic for lesson generation"));
       return;
     }
 
@@ -673,7 +694,7 @@ export default function AgentSimulator() {
         console.log("🚀 Using enhanced lesson generation with orchestration...");
 
         toast.success(
-          "🎯 Enhanced lesson generation started! Using AI orchestration for personalized content.",
+          t("🎯 Enhanced lesson generation started! Using AI orchestration for personalized content."),
           {
             icon: "🚀",
             duration: 4000,
@@ -732,7 +753,7 @@ export default function AgentSimulator() {
           {
             id: generateUniqueId(),
             sender: "system",
-            content: `Generating lesson for ${trimmedSubject}: ${trimmedTopic}. This may take a few minutes...`,
+            content: `${t("Generating lesson for")} ${trimmedSubject}: ${trimmedTopic}. ${t("This may take a few minutes...")}`,
             timestamp: new Date().toISOString(),
           },
         ]);
@@ -749,7 +770,7 @@ export default function AgentSimulator() {
           {
             id: generateUniqueId(),
             sender: "system",
-            content: `Generated lesson for ${trimmedSubject}: ${trimmedTopic}`,
+            content: `${t("Generated lesson for")} ${trimmedSubject}: ${trimmedTopic}`,
             timestamp: new Date().toISOString(),
           },
         ]);
@@ -764,14 +785,14 @@ export default function AgentSimulator() {
 
     } catch (error) {
       console.error("Error generating lesson:", error);
-      toast.error(`Failed to generate lesson: ${error.message || error}`);
+      toast.error(`${t("Failed to generate lesson")}: ${error.message || error}`);
 
       setMessages((prev) => [
         ...prev,
         {
           id: generateUniqueId(),
           sender: "system",
-          content: `Failed to generate lesson: ${error.message || error}`,
+          content: `${t("Failed to generate lesson")}: ${error.message || error}`,
           timestamp: new Date().toISOString(),
         },
       ]);
@@ -793,7 +814,25 @@ export default function AgentSimulator() {
         formattedLesson = lessonData;
       }
 
-      setLessonData(formattedLesson);
+      // Create a new object to avoid modifying frozen/sealed objects
+      // Normalize lesson data structure - map content/text to explanation if needed
+      let normalizedLesson = { ...formattedLesson };
+      
+      if (normalizedLesson && !normalizedLesson.explanation) {
+        if (normalizedLesson.content) {
+          normalizedLesson = { ...normalizedLesson, explanation: normalizedLesson.content };
+        } else if (normalizedLesson.text) {
+          normalizedLesson = { ...normalizedLesson, explanation: normalizedLesson.text };
+        }
+      }
+
+      // Ensure activity is accessible
+      if (normalizedLesson && !normalizedLesson.activity && normalizedLesson.enhanced_features?.activity) {
+        normalizedLesson = { ...normalizedLesson, activity: normalizedLesson.enhanced_features.activity };
+      }
+
+      console.log("Formatted lesson data:", normalizedLesson);
+      setLessonData(normalizedLesson);
 
       // Add success message
       setMessages((prev) => [
@@ -804,13 +843,13 @@ export default function AgentSimulator() {
           agentName: "EduMentor",
           agentColor: "#10B981",
           agentType: "education",
-          content: `Lesson generated successfully! Here's your personalized content for ${eduMentorProfile.selectedSubject}: ${eduMentorProfile.topic}`,
+          content: `${t("Lesson generated successfully! Here's your personalized content for")} ${eduMentorProfile.selectedSubject}: ${eduMentorProfile.topic}`,
           isLoading: false,
           timestamp: new Date().toISOString(),
         },
       ]);
 
-      toast.success("Lesson generated successfully!", {
+      toast.success(t("Lesson generated successfully!"), {
         icon: "📚",
         duration: 4000,
       });
@@ -863,6 +902,21 @@ export default function AgentSimulator() {
             formattedLesson = statusData.lesson_data;
           }
 
+          // Normalize lesson data structure - map content/text to explanation if needed
+          if (formattedLesson && !formattedLesson.explanation) {
+            if (formattedLesson.content) {
+              formattedLesson.explanation = formattedLesson.content;
+            } else if (formattedLesson.text) {
+              formattedLesson.explanation = formattedLesson.text;
+            }
+          }
+
+          // Ensure activity is accessible
+          if (formattedLesson && !formattedLesson.activity && formattedLesson.enhanced_features?.activity) {
+            formattedLesson.activity = formattedLesson.enhanced_features.activity;
+          }
+
+          console.log("Formatted lesson data from polling:", formattedLesson);
           setLessonData(formattedLesson);
           lessonFound = true;
 
@@ -875,13 +929,13 @@ export default function AgentSimulator() {
               agentName: "EduMentor",
               agentColor: "#10B981",
               agentType: "education",
-              content: `Lesson generated successfully! Here's your personalized content for ${eduMentorProfile.selectedSubject}: ${eduMentorProfile.topic}`,
+              content: `${t("Lesson generated successfully! Here's your personalized content for")} ${eduMentorProfile.selectedSubject}: ${eduMentorProfile.topic}`,
               isLoading: false,
               timestamp: new Date().toISOString(),
             },
           ]);
 
-          toast.success("Lesson generated successfully!", {
+          toast.success(t("Lesson generated successfully!"), {
             icon: "📚",
             duration: 4000,
           });
@@ -1212,7 +1266,7 @@ export default function AgentSimulator() {
 
                   // Show success toast
                   toast.success(
-                    "Financial simulation completed successfully!",
+                    t("Financial simulation completed successfully!"),
                     {
                       icon: "💰",
                       duration: 4000,
@@ -1275,7 +1329,7 @@ export default function AgentSimulator() {
               }
               // If the simulation failed, show an error
               else if (statusResponse.task_status === "failed") {
-                toast.error("Financial simulation failed. Please try again.");
+                toast.error(t("Financial simulation failed. Please try again."));
                 setIsProcessingSimulation(false);
                 clearInterval(refreshIntervalRef.current);
                 refreshIntervalRef.current = null;
@@ -1298,25 +1352,26 @@ export default function AgentSimulator() {
     }, 2000); // 2 seconds
   };
 
-  // Send financial simulation data to the API
+  // Send financial simulation data to the API - Now sends directly to financial endpoint
   const sendFinancialSimulationData = async () => {
+    // Show loading state
+    setIsLoadingResults(true);
+    
     try {
-      // Show loading state
-      setIsLoadingResults(true);
 
       // Validate required fields
       if (!financialProfile.name || financialProfile.name.trim() === '') {
-        toast.error('Please enter your name before starting financial simulation');
+        toast.error(t('Please enter your name before starting financial simulation'));
         return null;
       }
 
       if (!financialProfile.monthlyIncome || parseFloat(financialProfile.monthlyIncome) <= 0) {
-        toast.error('Please enter a valid monthly income before starting financial simulation');
+        toast.error(t('Please enter a valid monthly income before starting financial simulation'));
         return null;
       }
 
       if (!financialProfile.financialGoal || financialProfile.financialGoal.trim() === '') {
-        toast.error('Please enter your financial goal before starting financial simulation');
+        toast.error(t('Please enter your financial goal before starting financial simulation'));
         return null;
       }
 
@@ -1345,90 +1400,169 @@ export default function AgentSimulator() {
         user_id: user?.id || "anonymous-user",
       };
 
-      console.log("Sending financial simulation request:", simulationRequest);
-
-      // Use RTK Query to send the data
-      const data = await startFinancialSimulation(simulationRequest).unwrap();
-
-      // Check if we got a simulation_id from the response
-      if (data && data.simulation_id) {
-        // Store the simulation ID for tracking
-        setSimulationTaskId(data.simulation_id);
-
-        // Reset simulation progress
-        setSimulationProgress(0);
-
-        // Show success message
-        toast.success("Financial simulation completed successfully");
-
-        // Set processing state to false since simulation is complete
-        setIsProcessingSimulation(false);
-
-        // Store the results directly
-        setSimulationResults(data.results);
-
-        // Add a system message about the simulation completion
-        setMessages((prev) => {
-          const successMessage = {
-            id: generateUniqueId(),
-            sender: "system",
-            content: `Financial simulation completed! Generated ${data.recommendations?.length || 0} recommendations based on your profile.`,
-            timestamp: new Date().toISOString(),
-          };
-          return [...prev, successMessage];
-        });
-      } else if (data && data.task_id) {
-        // Handle legacy response format with task_id
-        setSimulationTaskId(data.task_id);
-        setSimulationProgress(0);
-        toast.success("Financial simulation started successfully");
-        setIsProcessingSimulation(true);
-        startRefreshInterval();
-
-        setMessages((prev) => {
-          const startMessage = {
-            id: generateUniqueId(),
-            sender: "system",
-            content: "Financial simulation is processing. Results will update automatically.",
-            timestamp: new Date().toISOString(),
-          };
-          return [...prev, startMessage];
-        });
-      } else {
-        // Handle unknown response format
-        toast.success("Financial simulation data sent successfully");
-        setIsProcessingSimulation(true);
-        await fetchSimulationResults(true);
-        startRefreshInterval();
+      // Instead of starting simulation, send a message directly to financial endpoint
+      const financialAgent = agents.find((a) => a.type === "financial");
+      if (!financialAgent) {
+        toast.error("Financial agent not found");
+        return null;
       }
 
-      return data;
-    } catch (error) {
-      console.error("Failed to send financial simulation data:", error);
+      // Create a query asking for financial advice based on the profile
+      const queryText = `Please provide me with comprehensive financial advice based on my profile. My monthly income is ₹${financialProfile.monthlyIncome}, my expenses total ₹${financialProfile.expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)}, my financial goal is ${financialProfile.financialGoal}, my investment style is ${financialProfile.financialType}, and my risk tolerance is ${financialProfile.riskLevel}.`;
 
-      // Enhanced error handling
+      // Add loading message
+      const loadingMessageId = generateUniqueId() + 1;
+      const loadingMessage = {
+        id: loadingMessageId,
+        sender: financialAgent.id,
+        agentName: financialAgent.name,
+        agentColor: financialAgent.color,
+        agentType: financialAgent.type,
+        content: "",
+        isLoading: true,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, loadingMessage]);
+
+      try {
+        // Get current language (map i18n language to backend format)
+        const currentLanguage = i18n.language === "ar" ? "arabic" : "english";
+        
+        // Call the financial endpoint
+        const financialPayload = {
+          query: queryText,
+          user_id: user?.id || "anonymous",
+          name: financialProfile.name || undefined,
+          monthly_income: parseFloat(financialProfile.monthlyIncome) || undefined,
+          financial_goal: financialProfile.financialGoal || undefined,
+          financial_type: financialProfile.financialType || undefined,
+          risk_level: financialProfile.riskLevel || undefined,
+          language: currentLanguage,
+        };
+
+        // Add expenses if available
+        if (financialProfile.expenses && financialProfile.expenses.length > 0) {
+          const validExpenses = financialProfile.expenses
+            .filter(exp => exp.name && exp.name.trim() !== '' && exp.amount && parseFloat(exp.amount) > 0)
+            .map(exp => ({
+              name: exp.name.trim(),
+              amount: parseFloat(exp.amount)
+            }));
+          
+          if (validExpenses.length > 0) {
+            financialPayload.expenses = validExpenses;
+          }
+        }
+
+        const response = await fetch(`${WELLNESS_API_BASE_URL}/financial`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+          },
+          body: JSON.stringify(financialPayload),
+        });
+
+        if (!response.ok) {
+          setMessages((prev) => prev.filter((msg) => msg.id !== loadingMessageId));
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        
+        // Remove loading message
+        setMessages((prev) => prev.filter((msg) => msg.id !== loadingMessageId));
+
+        // Extract response content
+        let responseContent = "";
+        if (data.response) {
+          responseContent = data.response;
+        } else if (data.message) {
+          responseContent = data.message;
+        } else {
+          responseContent = "I received your request, but couldn't process it properly. Please try again.";
+        }
+
+        if (!responseContent || responseContent.trim().length === 0) {
+          throw new Error("Empty response received from financial API");
+        }
+
+        // Add agent message with response
+        const agentMessage = {
+          id: generateUniqueId() + 2,
+          sender: financialAgent.id,
+          agentName: financialAgent.name,
+          agentColor: financialAgent.color,
+          agentType: financialAgent.type,
+          content: responseContent.trim(),
+          timestamp: new Date().toISOString(),
+          isLoading: false,
+        };
+        
+        setMessages((prev) => [...prev, agentMessage]);
+        
+        toast.success(t("Financial guidance received!"), {
+          duration: 3000,
+        });
+
+        // Start simulation so the UI shows it's active
+        setIsSimulating(true);
+
+        return data;
+      } catch (error) {
+        console.error("Error in FinancialCrew Start button:", error);
+        
+        // Remove loading message
+        setMessages((prev) => prev.filter((msg) => !msg.isLoading || msg.id !== loadingMessageId));
+        
+        // Show error toast
+        toast.error(t("Failed to get financial guidance. Please try again."), {
+          duration: 5000,
+        });
+        
+        // Add error message to chat
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: generateUniqueId() + 1,
+            sender: "system",
+            agentName: "System",
+            agentColor: "#EF4444",
+            agentType: "system",
+            content: t("I apologize, but I couldn't process your financial query. Please try again or check your connection."),
+            timestamp: new Date().toISOString(),
+            isLoading: false,
+          },
+        ]);
+        
+        return null;
+      }
+    } catch (outerError) {
+      console.error("Failed to send financial simulation data:", outerError);
+
+      // Enhanced error handling for validation errors
       let errorMessage = "Unknown error occurred";
       
-      if (error?.data) {
+      if (outerError?.data) {
         // Handle API validation errors
-        if (error.data.detail) {
-          if (Array.isArray(error.data.detail)) {
+        if (outerError.data.detail) {
+          if (Array.isArray(outerError.data.detail)) {
             // Pydantic validation errors
-            const validationErrors = error.data.detail.map(e => {
+            const validationErrors = outerError.data.detail.map(e => {
               const field = e.loc ? e.loc.join('.') : 'unknown field';
               return `${field}: ${e.msg || e.message}`;
             }).join(', ');
             errorMessage = `Validation error: ${validationErrors}`;
           } else {
-            errorMessage = error.data.detail;
+            errorMessage = outerError.data.detail;
           }
         } else {
-          errorMessage = error.data.message || JSON.stringify(error.data);
+          errorMessage = outerError.data.message || JSON.stringify(outerError.data);
         }
-      } else if (error?.message) {
-        errorMessage = error.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
+      } else if (outerError?.message) {
+        errorMessage = outerError.message;
+      } else if (typeof outerError === 'string') {
+        errorMessage = outerError;
       }
 
       // Provide more specific error messages
@@ -1458,7 +1592,7 @@ export default function AgentSimulator() {
   // Start simulation
   const startSimulation = async () => {
     if (agents.length === 0) {
-      toast.error("Add at least one agent to start simulation");
+      toast.error(t("Add at least one agent to start simulation"));
       return;
     }
 
@@ -1485,17 +1619,15 @@ export default function AgentSimulator() {
       }))
     );
 
-    // Add initial system message - clear previous messages
+    // Add initial system message - reset messages
     const startMessage = {
       id: generateUniqueId(),
       sender: "system",
-      content: `Agent simulation started. ${
+      content: `${t("Agent simulation started.")} ${
         agents.find((a) => a.id === activeAgentId).name
-      } is active and ready to assist.`,
+      } ${t("is active and ready to assist.")}`,
       timestamp: new Date().toISOString(),
     };
-
-    // Reset messages to just the start message
     setMessages([startMessage]);
 
     // Get the active agent
@@ -1575,6 +1707,33 @@ export default function AgentSimulator() {
       }
     }
 
+    // If financial agent is selected, start financial simulation automatically
+    if (activeAgent && activeAgent.type === "financial") {
+      // Validate financial profile before starting simulation
+      if (financialProfile.name && financialProfile.monthlyIncome && financialProfile.financialGoal) {
+        // Add a system message about the financial session starting
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: generateUniqueId() + 1,
+            sender: "system",
+            content: `Financial simulation started for ${financialProfile.name}`,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+
+        // Start financial simulation
+        try {
+          await sendFinancialSimulationData();
+        } catch (error) {
+          console.error("Error starting financial simulation:", error);
+          toast.error("Failed to start financial simulation. Please try again.");
+        }
+      } else {
+        toast.info("Please fill in your financial profile (name, income, and goal) before starting simulation.");
+      }
+    }
+
     // Call the API to start the simulation
     try {
       // Include financial profile data if the financial agent is selected
@@ -1595,6 +1754,19 @@ export default function AgentSimulator() {
       // Add EduMentor profile data if the education agent is active
       if (activeAgent && activeAgent.type === "education") {
         payload.eduMentorProfile = eduMentorProfile;
+      }
+
+      // Add WellnessBot profile data if the wellness agent is active
+      if (activeAgent && activeAgent.type === "wellness") {
+        payload.wellnessProfile = {
+          wellnessType: wellnessProfile.wellnessType,
+          moodScore: wellnessProfile.moodScore,
+          stressLevel: wellnessProfile.stressLevel,
+          wellnessGoals: wellnessProfile.wellnessGoals,
+          preferredActivities: wellnessProfile.preferredActivities,
+          stressTriggers: wellnessProfile.stressTriggers,
+          copingStrategies: wellnessProfile.copingStrategies,
+        };
       }
 
       await startAgentSimulation(payload).unwrap();
@@ -1724,7 +1896,7 @@ export default function AgentSimulator() {
       await resetAgentSimulation({
         userId: user?.id || "anonymous-user", // Use Supabase user ID or fallback to anonymous user
       }).unwrap();
-      toast.success("Simulation reset");
+      toast.success(t("Simulation reset"));
     } catch (error) {
       console.error("Failed to reset simulation:", error);
 
@@ -1732,229 +1904,226 @@ export default function AgentSimulator() {
       if (error?.status === 404) {
         // Just log the error, no need to show a message to the user since we're already in local mode
         console.log(
-          "Simulation server unavailable. Already running in local mode."
+          t("Simulation server unavailable. Already running in local mode.")
         );
-        toast.success("Simulation reset in local mode");
+        toast.success(t("Simulation reset in local mode"));
       } else {
         // For other errors, just show a toast
-        toast.success("Simulation reset in local mode");
+        toast.success(t("Simulation reset in local mode"));
       }
 
       // Continue with local simulation even if API call fails
     }
   };
 
-  // Handle wellness query
+  // Handle wellness query - using dedicated wellness API endpoint
   const handleWellnessQuery = async () => {
+    console.log("handleWellnessQuery called", { wellnessQuery, wellnessProfile });
+    
     if (!wellnessQuery.trim()) {
-      toast.error("Please enter your wellness concern");
+      toast.error(t("Please enter your wellness concern"));
       return;
     }
 
     setIsWellnessLoading(true);
+    console.log("Starting wellness query with:", { wellnessQuery, wellnessType: wellnessProfile.wellnessType });
 
     try {
-      const orchestrationUrl = "http://localhost:8006"; // Wellness API with Ollama on port 8006
-
-      // Try multiple endpoints in order of preference
-      const endpoints = [
-        "/wellness",      // Simple API (currently running)
-        "/ask-wellness"   // Full orchestration system (if available)
-      ];
-
-      let data = null;
-      let lastError = null;
-
-      for (const endpoint of endpoints) {
-        try {
-          // Format request based on endpoint
-          let requestData;
-          if (endpoint === "/wellness") {
-            // Enhanced wellness API format with Ollama support
-            requestData = {
-              query: wellnessQuery,
-              user_id: userId,
-              // Include mood and stress context for better Ollama responses
-              ...(wellnessType === "emotional" && {
-                mood_score: moodScore,
-                stress_level: stressLevel
-              })
-            };
-          } else {
-            // Full orchestration system format (/ask-wellness)
-            requestData = {
-              query: wellnessQuery,
-              user_id: userId,
-              ...(wellnessType === "emotional" && {
-                mood_score: moodScore,
-                stress_level: stressLevel
-              })
-            };
-          }
-
-          console.log(`Trying endpoint: ${endpoint}`);
-          const response = await fetch(`${orchestrationUrl}${endpoint}`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(requestData),
-          });
-
-          if (response.ok) {
-            data = await response.json();
-            console.log(`Success with endpoint: ${endpoint}`, data);
-            break;
-          } else {
-            lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-        } catch (error) {
-          console.log(`Failed with endpoint ${endpoint}:`, error);
-          lastError = error;
-          continue;
+      // Build wellness query with profile context
+      let queryText = wellnessQuery;
+      
+      // Add wellness profile context to the query for better guidance
+      if (wellnessProfile.wellnessType === "emotional") {
+        const moodDescription = wellnessProfile.moodScore <= 3 ? "very low" : 
+                               wellnessProfile.moodScore <= 5 ? "low" : 
+                               wellnessProfile.moodScore <= 7 ? "moderate" : "good";
+        const stressDescription = wellnessProfile.stressLevel <= 3 ? "low stress" : 
+                                 wellnessProfile.stressLevel <= 5 ? "moderate stress" : 
+                                 wellnessProfile.stressLevel <= 7 ? "high stress" : "very high stress";
+        
+        let contextInfo = `\n\nContext: My mood score is ${wellnessProfile.moodScore}/10 (${moodDescription}) and stress level is ${wellnessProfile.stressLevel}/10 (${stressDescription}).`;
+        
+        if (wellnessProfile.wellnessGoals.length > 0) {
+          contextInfo += ` My wellness goals: ${wellnessProfile.wellnessGoals.join(", ")}.`;
+        }
+        if (wellnessProfile.stressTriggers.length > 0) {
+          contextInfo += ` Things that stress me: ${wellnessProfile.stressTriggers.join(", ")}.`;
+        }
+        if (wellnessProfile.copingStrategies.length > 0) {
+          contextInfo += ` What helps me cope: ${wellnessProfile.copingStrategies.join(", ")}.`;
+        }
+        
+        queryText = wellnessQuery + contextInfo;
+      } else {
+        // Financial wellness context
+        if (wellnessProfile.wellnessGoals.length > 0) {
+          queryText = wellnessQuery + `\n\nContext: My financial goals: ${wellnessProfile.wellnessGoals.join(", ")}.`;
         }
       }
 
-      if (!data) {
-        throw lastError || new Error("All wellness endpoints failed");
-      }
-      setWellnessResponse(data);
-
-      // Show success toast with LLM provider info
-      const llmProvider = data.llm_provider || "unknown";
-      if (llmProvider === "ollama_primary") {
-        toast.success("✅ Response generated using local Ollama LLM!", {
-          duration: 3000,
-          style: {
-            background: '#D1FAE5',
-            color: '#065F46',
-            border: '1px solid #10B981'
-          }
-        });
-      } else if (llmProvider === "gemini_fallback") {
-        toast.success("✅ Response generated using Gemini API (fallback)", {
-          duration: 3000,
-          style: {
-            background: '#FEF3C7',
-            color: '#92400E',
-            border: '1px solid #F59E0B'
-          }
-        });
-      }
-
-      // Add user message to chat
+      // Add user message to chat first
       const userMessage = {
         id: generateUniqueId(),
         sender: "user",
         content: wellnessQuery,
         timestamp: new Date().toISOString(),
       };
+      setMessages((prev) => [...prev, userMessage]);
 
-      // Handle different response formats
-      let wellnessMessage;
+      // Add loading message
+      const loadingMessageId = generateUniqueId() + 1;
+      const loadingMessage = {
+        id: loadingMessageId,
+        sender: "wellness-agent",
+        agentName: "WellnessBot",
+        agentColor: "#F97316",
+        agentType: "wellness",
+        content: "",
+        isLoading: true,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, loadingMessage]);
 
-      if (data.advice && data.emotional_nudge) {
-        // Full orchestration system response
-        wellnessMessage = {
-          id: generateUniqueId() + 1,
-          sender: "wellness-agent",
-          agentName: "WellnessBot",
-          agentColor: "#F97316",
-          content: `Wellness guidance for: "${wellnessQuery}"`,
-          wellnessType: wellnessType,
-          advice: data.advice,
-          emotional_nudge: data.emotional_nudge,
-          triggers_detected: data.triggers_detected || [],
-          trigger_interventions: data.trigger_interventions || [],
-          timestamp: new Date().toISOString(),
-        };
-      } else if (data.response) {
-        // Simple API response format (with Ollama support)
-        const llmProvider = data.llm_provider || "unknown";
-        const isOllama = llmProvider === "ollama_primary";
+      // Get current language (map i18n language to backend format)
+      const currentLanguage = i18n.language === "ar" ? "arabic" : "english";
 
-        wellnessMessage = {
-          id: generateUniqueId() + 1,
-          sender: "wellness-agent",
-          agentName: isOllama ? "WellnessBot (Ollama)" : "WellnessBot",
-          agentColor: isOllama ? "#10B981" : "#F97316", // Green for Ollama, Orange for others
-          content: data.response,
-          wellnessType: wellnessType,
-          llmProvider: llmProvider,
-          advice: {
-            main_advice: data.response,
-            practical_steps: [],
-            tips: []
-          },
-          emotional_nudge: wellnessType === "emotional" ? {
-            encouragement: "Remember, taking care of your mental health is important.",
-            affirmation: "You're taking a positive step by seeking guidance.",
-            mindfulness_tip: "Take a moment to breathe deeply and be present."
-          } : null,
-          triggers_detected: [],
-          trigger_interventions: [],
-          sources: data.sources || [],
-          userContext: data.user_context || {},
-          timestamp: new Date().toISOString(),
-        };
-      } else {
-        // Fallback format
-        wellnessMessage = {
-          id: generateUniqueId() + 1,
-          sender: "wellness-agent",
-          agentName: "WellnessBot",
-          agentColor: "#F97316",
-          content: JSON.stringify(data),
-          wellnessType: wellnessType,
-          advice: {
-            main_advice: "Wellness guidance received. Please check the response for details.",
-            practical_steps: [],
-            tips: []
-          },
-          emotional_nudge: null,
-          triggers_detected: [],
-          trigger_interventions: [],
-          timestamp: new Date().toISOString(),
-        };
+      // Call the dedicated wellness endpoint
+      const wellnessUrl = new URL(`${WELLNESS_API_BASE_URL}/wellness`);
+      wellnessUrl.searchParams.append("query", queryText);
+      wellnessUrl.searchParams.append("user_id", userId || "anonymous");
+      wellnessUrl.searchParams.append("language", currentLanguage);
+      
+      const response = await fetch(wellnessUrl.toString(), {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        setMessages((prev) => prev.filter((msg) => msg.id !== loadingMessageId));
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      // Add both messages to the chat
-      setMessages(prev => [...prev, userMessage, wellnessMessage]);
+      const data = await response.json();
+      console.log("Wellness API Response:", data);
+      
+      // Remove loading message
+      setMessages((prev) => prev.filter((msg) => msg.id !== loadingMessageId));
 
-      toast.success("Wellness guidance received!");
+      // Extract response content from the wellness API response
+      let responseContent = "";
+      if (data.response) {
+        responseContent = data.response;
+      } else if (data.message) {
+        responseContent = data.message;
+      } else {
+        console.warn("Unexpected wellness API response format:", data);
+        responseContent = "I received your wellness query, but couldn't process it properly. Please try again.";
+      }
+
+      // Clean the response to remove echoed query and context
+      // The API often echoes back the query with context, we want to remove that
+      if (responseContent) {
+        // Pattern 1: Match "Thank you for reaching out about '...'." and extract everything after the closing quote and period
+        // This handles both cases: with and without context in the quoted string
+        const echoPattern = /^Thank you for reaching out about ['"](?:[^'"]*?Context:[^'"]*?|[^'"]*?)['"]\.\s*/i;
+        responseContent = responseContent.replace(echoPattern, "");
+        
+        // Pattern 2: Remove any remaining "Context: ..." patterns that might be outside quotes
+        responseContent = responseContent.replace(/(?:^|\s)(?:\\n\\n|\\n|\n\n|\s)Context:.*?\.\s*/gi, "");
+        
+        // Pattern 3: Remove any quoted text at the start that looks like an echo
+        responseContent = responseContent.replace(/^['"].*?['"]\.\s*/, "");
+        
+        // Pattern 4: Find where the actual advice starts (common starters)
+        // Look for patterns like "It's important", "Here are", "I recommend", etc.
+        const adviceStarters = [
+          /It'?s\s+(?:important|crucial|essential|vital)/i,
+          /Here\s+are/i,
+          /I\s+(?:recommend|suggest|advise)/i,
+          /You\s+(?:should|can|may|might)/i,
+          /Consider/i,
+          /Try/i,
+          /Focus\s+on/i,
+          /Remember/i,
+          /Take\s+time/i,
+        ];
+        
+        for (const pattern of adviceStarters) {
+          const match = responseContent.match(pattern);
+          if (match && match.index > 0) {
+            // Found advice starter, extract from there
+            responseContent = responseContent.substring(match.index).trim();
+            break;
+          }
+        }
+        
+        // Clean up: normalize whitespace (convert \n to space, collapse multiple spaces)
+        responseContent = responseContent.replace(/\\n/g, " ").replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+      }
+
+      // Validate that we have actual content
+      if (!responseContent || responseContent.trim().length === 0) {
+        console.error("Empty response content received after cleaning");
+        throw new Error("Empty response received from wellness API");
+      }
+
+      console.log("Extracted response content length:", responseContent.length);
+      console.log("Extracted response content preview:", responseContent.substring(0, 200));
+
+      // Ensure we have meaningful content
+      const trimmedContent = responseContent.trim();
+      if (trimmedContent.length === 0) {
+        throw new Error("Response content is empty after trimming");
+      }
+
+      // Add agent response
+      const wellnessMessage = {
+        id: generateUniqueId() + 2,
+        sender: "wellness-agent",
+        agentName: "WellnessBot",
+        agentColor: "#F97316",
+        agentType: "wellness",
+        content: trimmedContent,
+        wellnessType: wellnessProfile.wellnessType,
+        timestamp: new Date().toISOString(),
+        isLoading: false,
+        // Include sources if available
+        sources: data.sources || null,
+      };
+      
+      console.log("Adding wellness message to chat:", wellnessMessage);
+      setMessages((prev) => {
+        const updated = [...prev, wellnessMessage];
+        console.log("Updated messages count:", updated.length);
+        return updated;
+      });
+      setWellnessResponse({ content: trimmedContent });
+      
+      // Show success toast
+      toast.success(t("Wellness guidance received!"), {
+        duration: 3000,
+      });
 
       // Clear the query
       setWellnessQuery("");
-
     } catch (error) {
       console.error("Wellness query error:", error);
+      
+      // Remove loading message on error
+      setMessages((prev) => prev.filter((msg) => !msg.isLoading || msg.sender !== "wellness-agent"));
 
-      // Provide helpful error messages
-      if (error.message.includes("Failed to fetch") || error.message.includes("404")) {
-        toast.error(
-          "Wellness API not available. Please start the backend server first.",
-          {
-            duration: 6000,
-            style: {
-              background: '#FEF3C7',
-              color: '#92400E',
-              border: '1px solid #F59E0B'
-            }
-          }
-        );
-
-        // Add a helpful message to the chat
-        const helpMessage = {
-          id: generateUniqueId() + 1,
-          sender: "system",
-          content: `🔧 Wellness API Setup Required\n\nTo use the wellness features, please:\n\n1. Run: Backend/start_all_services.bat (starts all services including wellness)\n2. Or manually: cd Backend/orchestration/unified_orchestration_system && python simple_api.py --port 8006\n3. ✅ Ollama is now the primary LLM (no API keys needed!)\n4. The wellness server will start at http://localhost:8006\n\n🤖 Now powered by local Ollama LLM for unlimited usage!`,
-          timestamp: new Date().toISOString(),
-        };
-
-        setMessages(prev => [...prev, helpMessage]);
-      } else {
-        toast.error("Failed to get wellness guidance. Please try again.");
-      }
+      toast.error(t("Failed to get wellness guidance. Please try again."));
+      
+      // Add error message to chat
+      const errorMessage = {
+        id: generateUniqueId() + 3,
+        sender: "system",
+        content: t("Error: Could not get wellness guidance. Please check your connection and try again."),
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsWellnessLoading(false);
     }
@@ -2406,11 +2575,103 @@ export default function AgentSimulator() {
       console.log("No authenticated user found, using anonymous-user");
     }
 
-    // Always send the user message to the learning endpoint
-    try {
+    // Check if wellnessBot is the active agent - if so, skip learning endpoint entirely
+    // For wellnessBot, we always use the chat API directly, regardless of simulation state
+    const activeAgentCheck = agents.find((a) => a.status === "active");
+    const wellnessBotAgent = agents.find((a) => a.type === "wellness");
+    const isWellnessBotActive = (activeAgentCheck && activeAgentCheck.type === "wellness") || 
+                                (wellnessBotAgent && !activeAgentCheck); // Also handle if wellnessBot exists but no agent is active
+    console.log("WellnessBot check:", { activeAgentCheck, wellnessBotAgent, isWellnessBotActive, isSimulating });
+
+    // Always send the user message to the learning endpoint (except for wellnessBot which uses its own API)
+    // Skip learning endpoint if wellnessBot is active OR if simulation is running with wellnessBot
+    if (!isWellnessBotActive) {
+      try {
       console.log("Sending user message to learning endpoint:", messageText);
 
+      // Check if this is an education agent - if so, use orchestration edumentor endpoint
+      const activeAgent = agents.find((a) => a.status === "active");
+      const educationAgent = agents.find((a) => a.type === "education");
+      
+      // Consider it an education agent if:
+      // 1. Active agent is education type, OR
+      // 2. There's lesson data (user generated a lesson), OR
+      // 3. EduMentor profile has subject/topic set (user is working with EduMentor)
+      const hasActiveEducationAgent = activeAgent && activeAgent.type === "education";
+      const hasLessonData = !!lessonData;
+      const hasEduMentorProfile = !!(eduMentorProfile?.selectedSubject && eduMentorProfile?.topic);
+      const isEducationAgent = hasActiveEducationAgent || hasLessonData || hasEduMentorProfile;
+
+      console.log("Education agent check:", {
+        isEducationAgent,
+        hasActiveEducationAgent,
+        hasLessonData,
+        hasEduMentorProfile,
+        activeAgentType: activeAgent?.type,
+        lessonDataKeys: lessonData ? Object.keys(lessonData) : null,
+        profileSubject: eduMentorProfile?.selectedSubject,
+        profileTopic: eduMentorProfile?.topic,
+        isSimulating
+      });
+
+      // If it's an education agent, use the orchestration edumentor endpoint
+      // Skip the learning endpoint entirely for education agents
+      if (isEducationAgent) {
+        console.log("Using EduMentor orchestration endpoint for education agent");
+        // Get current language (map i18n language to backend format)
+        const currentLanguage = i18n.language === "ar" ? "arabic" : "english";
+        
+        try {
+          const edumentorResponse = await askEdumentor({
+            query: messageText,
+            user_id: userId,
+            language: currentLanguage,
+          }).unwrap();
+
+          console.log("EduMentor response received:", edumentorResponse);
+
+          // Extract the explanation from the response
+          const responseContent = edumentorResponse.explanation || edumentorResponse.response || "I'm here to help you learn!";
+
+          // Add the EduMentor response as a message
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: generateUniqueId() + 1,
+              sender: "learning-agent",
+              agentName: "EduMentor Learning Assistant",
+              agentColor: "#8B5CF6",
+              agentType: "learning",
+              content: responseContent,
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+          return;
+        } catch (edumentorError) {
+          console.error("EduMentor endpoint error:", edumentorError);
+          
+          // Show error message to user instead of falling through
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: generateUniqueId() + 1,
+              sender: "system",
+              content: "Sorry, I couldn't process your message. Please try again later.",
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+          toast.error("Failed to get response from EduMentor. Please try again.");
+          return;
+        }
+      }
+
       // Only use PDF ID if there's an active PDF
+      // Skip learning endpoint entirely if this is an education agent
+      if (isEducationAgent) {
+        console.log("Skipping learning endpoint - this is an education agent");
+        return;
+      }
+
       let documentId = null;
 
       // If there's an active PDF, use its ID
@@ -2419,7 +2680,6 @@ export default function AgentSimulator() {
       }
       // If simulation is running, use agent type as context
       else if (isSimulating) {
-        const activeAgent = agents.find((a) => a.status === "active");
         if (activeAgent) {
           // Don't set documentId here - we'll let the backend handle it
           // Just log the agent type for debugging
@@ -2557,9 +2817,15 @@ export default function AgentSimulator() {
       }
     } catch (error) {
       // Error sending message to learning endpoint
+      console.error("Learning endpoint error:", error);
 
-      // If simulation is not running, show an error message
-      if (!isSimulating) {
+      // If simulation is not running, check if this might be a wellnessBot message
+      // If so, continue to wellnessBot handling instead of showing error
+      const wellnessBotAgent = agents.find((a) => a.type === "wellness");
+      if (!isSimulating && wellnessBotAgent) {
+        console.log("Learning endpoint failed, but wellnessBot exists - continuing to wellnessBot handling");
+        // Continue to wellnessBot handling below instead of showing error
+      } else if (!isSimulating) {
         setMessages((prev) => [
           ...prev,
           {
@@ -2573,18 +2839,41 @@ export default function AgentSimulator() {
         return;
       }
     }
+    } // End of learning endpoint call (skipped for wellnessBot)
 
     // Get the active agent (should be the selected one)
     const activeAgent = agents.find((a) => a.status === "active");
 
-    if (!activeAgent) {
-      // If no active agent is found, show an error
+    // For wellnessBot, handle it directly even if not marked as active but exists in agents
+    if (!activeAgent && isWellnessBotActive) {
+      // If wellnessBot was detected but not active, try to find it in agents
+      const wellnessBotAgent = agents.find((a) => a.type === "wellness");
+      if (wellnessBotAgent) {
+        // Set it as active temporarily for this message
+        setAgents((prev) =>
+          prev.map((agent) =>
+            agent.id === wellnessBotAgent.id
+              ? { ...agent, status: "active" }
+              : agent
+          )
+        );
+      }
+    }
+
+    if (!activeAgent && !isWellnessBotActive) {
+      // If no active agent is found and it's not wellnessBot, show an error
       toast.error("No active agent found. Please restart the simulation.");
       return;
     }
 
-    // Use the active agent as the responding agent
-    const respondingAgent = activeAgent;
+    // Use the active agent as the responding agent (or wellnessBot if it was just activated)
+    const respondingAgent = activeAgent || agents.find((a) => a.type === "wellness");
+
+    // Safety check - if no responding agent found, show error and return
+    if (!respondingAgent) {
+      toast.error("No agent available. Please select an agent and start the simulation.");
+      return;
+    }
 
     // Generate a confidence score with slight variation
     const baseConfidence = respondingAgent.confidence;
@@ -2612,68 +2901,63 @@ export default function AgentSimulator() {
         userId: userId, // Use the userId we already determined above
       };
 
-      // Add financial profile data if the financial agent is active
-      if (respondingAgent.type === "financial") {
-        // Create a copy of the financial profile without the uniqueId field
-        // as it will be handled by the backend
-        const { uniqueId: _uniqueId, ...financialProfileData } =
-          financialProfile;
-        payload.financialProfile = financialProfileData;
-
-        // Also send the financial simulation data to the dedicated API endpoint
-        try {
-          await sendFinancialSimulationData();
-
-          // Add a small delay to ensure the backend has processed the data
-          setTimeout(async () => {
-            try {
-              await fetchSimulationResults();
-            } catch (error) {
-              console.error("Error fetching simulation results:", error);
-            }
-          }, 2000);
-        } catch (error) {
-          console.error(
-            "Error in financial simulation during message submission:",
-            error
-          );
-          // Continue with message handling even if financial data sending fails
-        }
-      }
-
-      // Add EduMentor profile data if the education agent is active
-      if (respondingAgent.type === "education") {
-        payload.eduMentorProfile = eduMentorProfile;
-
-        // If lesson data is available, include it in the payload
-        if (lessonData) {
-          payload.lessonContext = lessonData;
+      // Skip message sending for financial, wellness, and education agents
+      // These bots should only be used through their dedicated forms/buttons
+      if (respondingAgent.type === "financial" || 
+          respondingAgent.type === "wellness" || 
+          respondingAgent.type === "education") {
+        toast.info(t("Please use the dedicated form/button for this agent instead of the chat."), {
+            duration: 3000,
+          });
+          return;
         }
 
-        // If user is asking about a new topic and no lesson is generated, suggest generating one
-        if (!lessonData && !isGeneratingLesson && eduMentorProfile.selectedSubject.trim() && eduMentorProfile.topic.trim()) {
-          // Add a helpful message suggesting lesson generation
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: generateUniqueId() + 1,
-              sender: "learning-agent",
-              agentName: "EduMentor",
-              agentColor: "#10B981",
-              agentType: "education",
-              content: `I notice you haven't generated a lesson for ${eduMentorProfile.selectedSubject}: ${eduMentorProfile.topic} yet. Would you like me to generate personalized lesson content first? Click the "Generate Lesson" button above for a comprehensive learning experience.`,
-              isLoading: false,
-              timestamp: new Date().toISOString(),
-            },
-          ]);
-        }
-      }
+
+      // For non-wellness agents, use the standard agent message API
+      // Add loading message for better UX
+      const loadingMessageId = generateUniqueId() + 1;
+      const loadingMessage = {
+        id: loadingMessageId,
+        sender: respondingAgent.id,
+        agentName: respondingAgent.name,
+        agentColor: respondingAgent.color,
+        agentType: respondingAgent.type,
+        content: "",
+        isLoading: true,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, loadingMessage]);
 
       // Call the API to send the message
       const response = await sendAgentMessage(payload).unwrap();
 
-      // If we get a response from the API, use it
+      // Remove loading message
+      setMessages((prev) => prev.filter((msg) => msg.id !== loadingMessageId));
+
+      // Extract response content (handle different response formats)
+      let responseContent = "";
       if (response && response.content) {
+        responseContent = response.content;
+      } else if (response && response.message) {
+        responseContent = response.message;
+      } else if (response && response.response) {
+        responseContent = typeof response.response === "string" ? response.response : response.response.message || JSON.stringify(response.response);
+      } else if (response && typeof response === "string") {
+        responseContent = response;
+      } else {
+        console.warn("Unexpected agent API response format:", response);
+        responseContent = `I received your message about "${messageText}", but I'm having trouble processing it right now. Please try again.`;
+      }
+
+      // Validate that we have actual content
+      if (!responseContent || responseContent.trim().length === 0) {
+        throw new Error("Empty response received from agent API");
+      }
+
+      const trimmedContent = responseContent.trim();
+
+      // If we get a response from the API, use it
+      if (trimmedContent) {
         // Create the agent message with the API response
         const agentMessage = {
           id: generateUniqueId() + 1,
@@ -2681,10 +2965,11 @@ export default function AgentSimulator() {
           agentName: respondingAgent.name,
           agentColor: respondingAgent.color,
           agentType: respondingAgent.type,
-          content: response.content,
+          content: trimmedContent,
           timestamp: new Date().toISOString(),
-          confidence: response.confidence || newConfidence,
-          audioUrl: response.audioUrl || null,
+          confidence: response?.confidence || newConfidence,
+          audioUrl: response?.audioUrl || null,
+          isLoading: false,
         };
 
         // Update messages
@@ -2693,6 +2978,11 @@ export default function AgentSimulator() {
         return;
       }
     } catch (error) {
+      console.error("Error in agent message handling:", error);
+      
+      // Remove any loading messages on error
+      setMessages((prev) => prev.filter((msg) => !msg.isLoading || (msg.sender !== respondingAgent.id && msg.sender !== "wellness-agent")));
+      
       // Check for 404 error
       if (error?.status === 404) {
         // Add a system message about the error (only once per session)
@@ -2711,6 +3001,26 @@ export default function AgentSimulator() {
         }
 
         // Agent server unavailable. Running in local mode.
+      } else {
+        // Show user-friendly error message for other errors
+        toast.error(t("Failed to get agent response. Please try again."), {
+          duration: 5000,
+        });
+        
+        // Add error message to chat
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: generateUniqueId() + 1,
+            sender: "system",
+            agentName: "System",
+            agentColor: "#EF4444",
+            agentType: "system",
+            content: t("I apologize, but I couldn't process your message. Please try again or check your connection."),
+            timestamp: new Date().toISOString(),
+            isLoading: false,
+          },
+        ]);
       }
       // Continue with local simulation if API call fails
     }
@@ -2978,14 +3288,14 @@ export default function AgentSimulator() {
           </div>
 
           {/* User name display */}
-          <div className="flex items-center bg-blue-500/20 px-3 py-1 rounded-lg">
-            <User size={14} className="mr-2 text-blue-300" />
-            <span className="text-sm font-medium text-blue-100">
-              {simulationResults.user_name ||
-                financialProfile.name ||
-                "Agent Unavailable"}
-            </span>
-          </div>
+          {(simulationResults.user_name || financialProfile.name) && (
+            <div className="flex items-center bg-blue-500/20 px-3 py-1 rounded-lg">
+              <User size={14} className="mr-2 text-blue-300" />
+              <span className="text-sm font-medium text-blue-100">
+                {simulationResults.user_name || financialProfile.name}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Month tabs removed as requested */}
@@ -4039,26 +4349,6 @@ export default function AgentSimulator() {
             </div>
           )}
 
-        {/* Financial Chat Interface */}
-        <div className="mt-6 border-t border-blue-500/30 pt-4">
-          <div className="mb-3">
-            <h4 className="text-sm font-medium text-white/90 mb-1 flex items-center">
-              <MessageSquare size={14} className="mr-1.5 text-blue-400" />
-              Financial AI Advisor
-            </h4>
-            <p className="text-xs text-white/60">
-              Ask questions about your financial data and get personalized advice
-            </p>
-          </div>
-          <div className="h-96">
-            <FinancialChatInterface
-              financialData={financialProfile}
-              simulationResults={simulationResults}
-              userId={user?.id || "guest-user"}
-              className="h-full"
-            />
-          </div>
-        </div>
       </div>
     );
   };
@@ -4181,8 +4471,8 @@ export default function AgentSimulator() {
             </span>
           </div>
 
-          {/* Main advice */}
-          {message.advice && (
+          {/* Main advice or content */}
+          {message.advice ? (
             <div className="mb-4">
               <h4 className="text-orange-400 font-medium mb-2">Guidance</h4>
               <p className="text-white/90 leading-relaxed">{message.advice.main_advice}</p>
@@ -4215,7 +4505,12 @@ export default function AgentSimulator() {
                 </div>
               )}
             </div>
-          )}
+          ) : message.content ? (
+            <div className="mb-4">
+              <h4 className="text-orange-400 font-medium mb-2">Guidance</h4>
+              <p className="text-white/90 leading-relaxed whitespace-pre-wrap">{message.content}</p>
+            </div>
+          ) : null}
 
           {/* Emotional support */}
           {message.emotional_nudge && (
@@ -4533,7 +4828,7 @@ export default function AgentSimulator() {
         <div ref={containerRef} className="flex flex-col h-full">
           <h1 className="text-3xl font-bold text-white mb-4 flex items-center">
             <BrainCircuit className="mr-3 text-orange-500" />
-            Agent Simulator
+            {t("Agent Simulator")}
           </h1>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-[calc(100%-3rem)] overflow-hidden">
@@ -4546,7 +4841,7 @@ export default function AgentSimulator() {
                       <Settings size={18} className="text-orange-400" />
                     </div>
                     <h2 className="text-xl font-bold text-white">
-                      Agent Configuration
+                      {t("Agent Configuration")}
                     </h2>
                   </div>
                   <button
@@ -4559,32 +4854,29 @@ export default function AgentSimulator() {
 
 
 
-                {/* Financial Simulation Form - Only show when Financial Agent is selected and not simulating */}
+                {/* Financial Simulation Form - Always show when Financial Agent is selected */}
                 {selectedAgent &&
                   agents.find((a) => a.id === selectedAgent)?.type ===
-                    "financial" &&
-                  !isSimulating && (
+                    "financial" && (
                     <div className="mb-4 bg-blue-900/20 rounded-lg p-4 border border-blue-500/30 h-[calc(100%-8rem)] overflow-y-auto custom-scrollbar">
                       <h3 className="text-lg font-semibold text-white mb-3 flex items-center">
                         <DollarSign size={18} className="mr-2 text-blue-400" />
-                        Financial Agent Simulation
+                        {t("Financial Agent Simulation")}
                       </h3>
                       <p className="text-sm text-white/80 mb-4">
-                        Welcome to your Personal Financial Simulation. Simulate
-                        months of financial life, get guidance, and improve your
-                        money habits with AI agents!
+                        {t("Welcome to your Personal Financial Simulation. Simulate months of financial life, get guidance, and improve your money habits with AI agents!")}
                       </p>
 
                       {/* Basic Financial Profile */}
                       <div className="mb-4">
                         <h4 className="text-sm font-medium text-white/90 mb-2 flex items-center">
                           <User size={14} className="mr-1.5 text-blue-400" />
-                          Basic Financial Profile
+                          {t("Basic Financial Profile")}
                         </h4>
 
                         <div className="mb-2">
                           <label className="block text-xs text-white/70 mb-1">
-                            Your Name
+                            {t("Your Name")}
                           </label>
                           <input
                             type="text"
@@ -4601,7 +4893,7 @@ export default function AgentSimulator() {
 
                         <div>
                           <label className="block text-xs text-white/70 mb-1">
-                            Monthly Income (₹)
+                            {t("Monthly Income")} (₹)
                           </label>
                           <input
                             type="text"
@@ -4624,12 +4916,12 @@ export default function AgentSimulator() {
                             size={14}
                             className="mr-1.5 text-blue-400"
                           />
-                          Monthly Expenses
+                          {t("Monthly Expenses")}
                         </h4>
 
                         <div className="mb-2">
                           <label className="block text-xs text-white/70 mb-1">
-                            Number of Expense Categories
+                            {t("Number of Expense Categories")}
                           </label>
                           <div className="flex items-center">
                             <input
@@ -4655,7 +4947,7 @@ export default function AgentSimulator() {
                           >
                             <div className="col-span-2">
                               <label className="block text-xs text-white/70 mb-1">
-                                Expense {index + 1} Name
+                                {t("Expense")} {index + 1} {t("Name")}
                               </label>
                               <input
                                 type="text"
@@ -4673,7 +4965,7 @@ export default function AgentSimulator() {
 
                             <div className="col-span-2">
                               <label className="block text-xs text-white/70 mb-1">
-                                Amount (₹)
+                                {t("Amount")} (₹)
                               </label>
                               <input
                                 type="text"
@@ -4707,13 +4999,12 @@ export default function AgentSimulator() {
                       <div className="mb-4">
                         <h4 className="text-sm font-medium text-white/90 mb-2 flex items-center">
                           <Target size={14} className="mr-1.5 text-blue-400" />
-                          Financial Goal
+                          {t("Financial Goal")}
                         </h4>
 
                         <div>
                           <label className="block text-xs text-white/70 mb-1">
-                            What's your financial goal? (e.g., 'Save ₹50,000 for
-                            emergency fund')
+                            {t("What's your financial goal? (e.g., 'Save ₹50,000 for emergency fund')")}
                           </label>
                           <input
                             type="text"
@@ -4994,42 +5285,40 @@ export default function AgentSimulator() {
                         <div className="inline-flex items-center justify-center px-4 py-2 bg-blue-500/20 border border-blue-500/30 rounded-lg text-blue-300">
                           <Clock size={16} className="mr-2" />
                           <span>
-                            Fill in your financial details and press Start to
-                            begin simulation
+                            {t("Fill in your financial details and press Start to begin simulation")}
                           </span>
                         </div>
                       </div>
                     </div>
                   )}
 
-                {/* EduMentor Form - Only show when EduMentor Agent is selected and not simulating */}
+                {/* EduMentor Form - Always show when EduMentor Agent is selected */}
                 {selectedAgent &&
                   agents.find((a) => a.id === selectedAgent)?.type ===
-                    "education" &&
-                  !isSimulating && (
+                    "education" && (
                     <div className="mb-4 bg-green-900/20 rounded-lg p-4 border border-green-500/30 h-[calc(100%-8rem)] overflow-y-auto custom-scrollbar">
                       <h3 className="text-lg font-semibold text-white mb-3 flex items-center">
                         <BookOpen size={18} className="mr-2 text-green-400" />
-                        EduMentor Learning Assistant
+                        {t("EduMentor Learning Assistant")}
                       </h3>
                       <p className="text-sm text-white/80 mb-4">
-                        Welcome to your Personal Learning Assistant. Select a subject and topic to begin your educational journey with AI-powered guidance!
+                        {t("Welcome to your Personal Learning Assistant. Select a subject and topic to begin your educational journey with AI-powered guidance!")}
                       </p>
 
                       {/* Subject Selection */}
                       <div className="mb-4">
                         <h4 className="text-sm font-medium text-white/90 mb-2 flex items-center">
                           <Book size={14} className="mr-1.5 text-green-400" />
-                          Learning Profile
+                          {t("Learning Profile")}
                         </h4>
 
                         <div className="mb-2">
                           <label className="block text-xs text-white/70 mb-1">
-                            Subject
+                            {t("Subject")}
                           </label>
                           <input
                             type="text"
-                            placeholder="Type any subject (e.g. Mathematics, Physics, History)"
+                            placeholder={t("Type any subject (e.g. Mathematics, Physics, History)")}
                             value={eduMentorProfile.selectedSubject}
                             onChange={(e) =>
                               handleEduMentorProfileChange(
@@ -5043,11 +5332,11 @@ export default function AgentSimulator() {
 
                         <div>
                           <label className="block text-xs text-white/70 mb-1">
-                            Topic
+                            {t("Topic")}
                           </label>
                           <input
                             type="text"
-                            placeholder="Enter a topic to explore"
+                            placeholder={t("Enter a topic to explore")}
                             value={eduMentorProfile.topic}
                             onChange={(e) =>
                               handleEduMentorProfileChange(
@@ -5064,13 +5353,13 @@ export default function AgentSimulator() {
                       <div className="mb-4">
                         <h4 className="text-sm font-medium text-white/90 mb-2 flex items-center">
                           <Settings size={14} className="mr-1.5 text-green-400" />
-                          Learning Options
+                          {t("Learning Options")}
                         </h4>
 
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <label className="text-xs text-white/70">
-                              Include Wikipedia Sources
+                              {t("Include Wikipedia Sources")}
                             </label>
                             <input
                               type="checkbox"
@@ -5087,7 +5376,7 @@ export default function AgentSimulator() {
 
                           <div className="flex items-center justify-between">
                             <label className="text-xs text-white/70">
-                              Use Knowledge Store
+                              {t("Use Knowledge Store")}
                             </label>
                             <input
                               type="checkbox"
@@ -5104,7 +5393,7 @@ export default function AgentSimulator() {
 
                           <div className="flex items-center justify-between">
                             <label className="text-xs text-white/70">
-                              Use Orchestration Engine
+                              {t("Use Orchestration Engine")}
                             </label>
                             <input
                               type="checkbox"
@@ -5125,7 +5414,7 @@ export default function AgentSimulator() {
                         <div className="inline-flex items-center justify-center px-4 py-2 bg-green-500/20 border border-green-500/30 rounded-lg text-green-300">
                           <Clock size={16} className="mr-2" />
                           <span>
-                            Fill in your learning preferences and use the "Generate Lesson" button below to create personalized educational content
+                            {t("Fill in your learning preferences and use the \"Generate Lesson\" button below to create personalized educational content")}
                           </span>
                         </div>
                       </div>
@@ -5142,12 +5431,12 @@ export default function AgentSimulator() {
                         <div className="flex items-center">
                           <div className="animate-pulse mr-2 w-3 h-3 rounded-full bg-blue-400"></div>
                           <p className="text-blue-300 font-medium">
-                            Financial simulation in progress...
+                            {t("Financial simulation in progress...")}
                           </p>
                         </div>
                         {isProcessingSimulation && (
                           <span className="text-xs text-blue-300">
-                            {simulationProgress}% complete
+                            {simulationProgress}% {t("complete")}
                           </span>
                         )}
                       </div>
@@ -5164,57 +5453,14 @@ export default function AgentSimulator() {
                     </div>
                   )}
 
-                {/* EduMentor Simulation Running Message */}
+                {/* Wellness Bot Form - Always show when Wellness Agent is selected */}
                 {selectedAgent &&
                   agents.find((a) => a.id === selectedAgent)?.type ===
-                    "education" &&
-                  isSimulating && (
-                    <div className="mb-4 bg-green-900/20 rounded-lg p-4 border border-green-500/30">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center">
-                          <div className="animate-pulse mr-2 w-3 h-3 rounded-full bg-green-400"></div>
-                          <p className="text-green-300 font-medium">
-                            {isGeneratingLesson ? "Generating lesson content..." : "EduMentor learning session in progress..."}
-                          </p>
-                        </div>
-                        <span className="text-xs text-green-300">
-                          {isGeneratingLesson ? "AI processing your request" : "Ready for questions"}
-                        </span>
-                      </div>
-
-                      <div className="text-xs text-green-200/70 mt-2">
-                        Subject: {eduMentorProfile.selectedSubject || "Not specified"} •
-                        Topic: {eduMentorProfile.topic || "Not specified"}
-                        {lessonTaskId && (
-                          <span className="ml-2 text-green-300">
-                            • Task ID: {lessonTaskId.substring(0, 8)}...
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Show lesson data if available */}
-                      {lessonData && (
-                        <div className="mt-3 p-3 bg-green-800/20 rounded-lg border border-green-600/30">
-                          <div className="text-xs text-green-200 font-medium mb-1">
-                            ✅ Lesson Generated Successfully
-                          </div>
-                          <div className="text-xs text-green-100/80">
-                            {lessonData.title || `${eduMentorProfile.selectedSubject}: ${eduMentorProfile.topic}`}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                {/* Wellness Bot Form - Only show when Wellness Agent is selected and not simulating */}
-                {selectedAgent &&
-                  agents.find((a) => a.id === selectedAgent)?.type ===
-                    "wellness" &&
-                  !isSimulating && (
+                    "wellness" && (
                     <div className="mb-4 bg-orange-900/20 rounded-lg p-4 border border-orange-500/30 h-[calc(100%-8rem)] overflow-y-auto custom-scrollbar">
-                      <h3 className="text-lg font-semibold text-white mb-3 flex items-center">
+                        <h3 className="text-lg font-semibold text-white mb-3 flex items-center">
                         <Heart size={18} className="mr-2 text-orange-400" />
-                        Wellness Assistant
+                        {t("Wellness Assistant")}
                       </h3>
 
 
@@ -5225,93 +5471,102 @@ export default function AgentSimulator() {
                       <div className="mb-4">
                         <div className="flex gap-2 mb-3">
                           <button
-                            onClick={() => setWellnessType("emotional")}
+                            onClick={() => handleWellnessProfileChange("wellnessType", "emotional")}
                             className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                              wellnessType === "emotional"
+                              wellnessProfile.wellnessType === "emotional"
                                 ? "bg-orange-500 text-white"
                                 : "bg-gray-700/50 text-white/70 hover:bg-gray-700/70"
                             }`}
                           >
                             <Heart size={16} className="inline mr-1" />
-                            Emotional Wellness
+                            {t("Emotional Wellness")}
                           </button>
                           <button
-                            onClick={() => setWellnessType("financial")}
+                            onClick={() => handleWellnessProfileChange("wellnessType", "financial")}
                             className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                              wellnessType === "financial"
+                              wellnessProfile.wellnessType === "financial"
                                 ? "bg-orange-500 text-white"
                                 : "bg-gray-700/50 text-white/70 hover:bg-gray-700/70"
                             }`}
                           >
                             <DollarSign size={16} className="inline mr-1" />
-                            Financial Wellness
+                            {t("Financial Wellness")}
                           </button>
                         </div>
                       </div>
 
                       {/* Emotional Wellness Controls */}
-                      {wellnessType === "emotional" && (
+                      {wellnessProfile.wellnessType === "emotional" && (
                         <div className="mb-4 space-y-3">
                           <div>
                             <label className="block text-sm font-medium text-white/80 mb-2">
-                              Current Mood Score: {moodScore}/10
+                              {t("Current Mood Score")}: {wellnessProfile.moodScore}/10
                             </label>
                             <input
                               type="range"
                               min="1"
                               max="10"
-                              value={moodScore}
-                              onChange={(e) => setMoodScore(parseInt(e.target.value))}
+                              value={wellnessProfile.moodScore}
+                              onChange={(e) => handleWellnessProfileChange("moodScore", parseInt(e.target.value))}
                               className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer"
                             />
                             <div className="flex justify-between text-xs text-white/60 mt-1">
-                              <span>Very Low</span>
-                              <span>Excellent</span>
+                              <span>{t("Very Low")}</span>
+                              <span>{t("Excellent")}</span>
                             </div>
                           </div>
                           <div>
                             <label className="block text-sm font-medium text-white/80 mb-2">
-                              Stress Level: {stressLevel}/10
+                              {t("Stress Level")}: {wellnessProfile.stressLevel}/10
                             </label>
                             <input
                               type="range"
                               min="1"
                               max="10"
-                              value={stressLevel}
-                              onChange={(e) => setStressLevel(parseInt(e.target.value))}
+                              value={wellnessProfile.stressLevel}
+                              onChange={(e) => handleWellnessProfileChange("stressLevel", parseInt(e.target.value))}
                               className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer"
                             />
                             <div className="flex justify-between text-xs text-white/60 mt-1">
-                              <span>Very Low</span>
-                              <span>Very High</span>
+                              <span>{t("Very Low")}</span>
+                              <span>{t("Very High")}</span>
                             </div>
                           </div>
                         </div>
                       )}
 
-                      {/* Query Input */}
+                      {/* Wellness Query Input */}
                       <div className="mb-4">
                         <label className="block text-sm font-medium text-white/80 mb-2">
-                          {wellnessType === "emotional" ? "What's on your mind?" : "Financial concern or question?"}
+                          {t("Your Wellness Question or Concern")}
                         </label>
                         <textarea
-                          value={wellnessQuery}
+                          value={wellnessQuery || ""}
                           onChange={(e) => setWellnessQuery(e.target.value)}
-                          placeholder={
-                            wellnessType === "emotional"
-                              ? "Share your feelings, concerns, or what you'd like guidance on..."
-                              : "Ask about budgeting, saving, debt management, or financial planning..."
-                          }
-                          className="w-full bg-orange-600/30 border border-orange-500/40 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/60 resize-none"
-                          rows="8"
+                          placeholder={t("Describe your wellness concern or ask for guidance...")}
+                          className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:border-orange-500/50 resize-none"
+                          rows="4"
                         />
                       </div>
+
+                      {/* Get Wellness Guidance Button */}
+                      <button
+                        onClick={handleWellnessQuery}
+                        disabled={!wellnessQuery?.trim() || isWellnessLoading}
+                        className={`w-full py-3 px-4 rounded-lg font-medium transition-all ${
+                          wellnessQuery?.trim() && !isWellnessLoading
+                            ? "bg-orange-500 hover:bg-orange-600 text-white"
+                            : "bg-gray-700/50 text-white/50 cursor-not-allowed"
+                        }`}
+                      >
+                        {isWellnessLoading ? t("Getting guidance...") : t("Get Wellness Guidance")}
+                      </button>
 
                       <div className="mt-4 text-center">
                         <div className="inline-flex items-center justify-center px-4 py-2 bg-orange-500/20 border border-orange-500/30 rounded-lg text-orange-300">
                           <Clock size={16} className="mr-2" />
                           <span>
-                            Fill in your wellness details and press Start to begin your wellness session
+                            {t("Fill in your wellness details and press Get Wellness Guidance to begin your wellness session")}
                           </span>
                         </div>
                       </div>
@@ -5328,19 +5583,19 @@ export default function AgentSimulator() {
                         <div className="flex items-center">
                           <div className="animate-pulse mr-2 w-3 h-3 rounded-full bg-orange-400"></div>
                           <p className="text-orange-300 font-medium">
-                            {isWellnessLoading ? "Getting wellness guidance..." : "Wellness session in progress..."}
+                            {isWellnessLoading ? t("Getting wellness guidance...") : t("Wellness session in progress...")}
                           </p>
                         </div>
                         <span className="text-xs text-orange-300">
-                          {isWellnessLoading ? "AI processing your request" : "Ready for wellness queries"}
+                          {isWellnessLoading ? t("AI processing your request") : t("Ready for wellness queries")}
                         </span>
                       </div>
 
                       <div className="text-xs text-orange-200/70 mt-2">
-                        Type: {wellnessType === "emotional" ? "Emotional Wellness" : "Financial Wellness"}
-                        {wellnessType === "emotional" && (
+                        {t("Type")}: {wellnessProfile.wellnessType === "emotional" ? t("Emotional Wellness") : t("Financial Wellness")}
+                        {wellnessProfile.wellnessType === "emotional" && (
                           <span className="ml-2">
-                            • Mood: {moodScore}/10 • Stress: {stressLevel}/10
+                            • {t("Mood")}: {wellnessProfile.moodScore}/10 • {t("Stress")}: {wellnessProfile.stressLevel}/10
                           </span>
                         )}
                       </div>
@@ -5372,12 +5627,12 @@ export default function AgentSimulator() {
                     ) : !selectedAgent ? (
                       <div className="flex-1 flex items-center justify-center">
                         <div className="text-center text-white/60 text-sm">
-                          Your agent inputs will be shown here to configure
+                          {t("Your agent inputs will be shown here to configure")}
                         </div>
                       </div>
                     ) : (
                       <div className="text-center text-white/60 text-sm">
-                        Start your session to see activity
+                        {t("Start your session to see activity")}
                       </div>
                     )}
                   </div>
@@ -5402,12 +5657,12 @@ export default function AgentSimulator() {
                           {isGeneratingLesson ? (
                             <>
                               <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white mr-2"></div>
-                              Generating...
+                              {t("Generating...")}
                             </>
                           ) : (
                             <>
                               <BookOpen size={16} className="mr-2" />
-                              Generate Lesson
+                              {t("Generate Lesson")}
                             </>
                           )}
                         </button>
@@ -5416,12 +5671,12 @@ export default function AgentSimulator() {
                             onClick={() => {
                               setLessonData(null);
                               setLessonTaskId(null);
-                              toast.success("Lesson cleared. Ready to generate new content.");
+                              toast.success(t("Lesson cleared. Ready to generate new content."));
                             }}
                             className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg flex items-center justify-center transition-colors"
                           >
                             <RotateCcw size={16} className="mr-2" />
-                            New Lesson
+                            {t("New Lesson")}
                           </button>
                         )}
                       </>
@@ -5429,23 +5684,41 @@ export default function AgentSimulator() {
                       /* Wellness Agent Controls */
                       <>
                         <button
-                          onClick={handleWellnessQuery}
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log("Get Wellness Guidance button clicked", { 
+                              wellnessQuery: wellnessQuery.trim(), 
+                              wellnessQueryLength: wellnessQuery.trim().length,
+                              isWellnessLoading,
+                              wellnessProfile 
+                            });
+                            if (!isWellnessLoading && wellnessQuery.trim()) {
+                              handleWellnessQuery();
+                            } else {
+                              console.warn("Button click ignored:", { 
+                                isWellnessLoading, 
+                                hasQuery: !!wellnessQuery.trim() 
+                              });
+                            }
+                          }}
                           disabled={isWellnessLoading || !wellnessQuery.trim()}
                           className={`flex-1 py-2 px-4 rounded-lg flex items-center justify-center transition-colors font-medium ${
                             isWellnessLoading || !wellnessQuery.trim()
                               ? 'bg-gray-600/50 text-gray-400 cursor-not-allowed'
-                              : 'bg-orange-600 hover:bg-orange-700 text-white'
+                              : 'bg-orange-600 hover:bg-orange-700 text-white cursor-pointer'
                           }`}
                         >
                           {isWellnessLoading ? (
                             <>
                               <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white mr-2"></div>
-                              Getting Guidance...
+                              {t("Getting Guidance...")}
                             </>
                           ) : (
                             <>
                               <Sparkles size={16} className="mr-2" />
-                              Get Wellness Guidance
+                              {t("Get Wellness Guidance")}
                             </>
                           )}
                         </button>
@@ -5453,12 +5726,12 @@ export default function AgentSimulator() {
                           onClick={() => {
                             setWellnessQuery("");
                             setWellnessResponse(null);
-                            toast.success("Wellness query cleared. Ready for new input.");
+                            toast.success(t("Wellness query cleared. Ready for new input."));
                           }}
                           className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg flex items-center justify-center transition-colors"
                         >
                           <RotateCcw size={16} className="mr-2" />
-                          Clear
+                          {t("Clear")}
                         </button>
                       </>
                     ) : selectedAgent ? (
@@ -5470,7 +5743,7 @@ export default function AgentSimulator() {
                             className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 px-4 rounded-lg flex items-center justify-center transition-colors"
                           >
                             <Play size={16} className="mr-2" />
-                            Start
+                            {t("Start")}
                           </button>
                         ) : (
                           <button
@@ -5478,7 +5751,7 @@ export default function AgentSimulator() {
                             className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg flex items-center justify-center transition-colors"
                           >
                             <Pause size={16} className="mr-2" />
-                            Pause
+                            {t("Pause")}
                           </button>
                         )}
                         <button
@@ -5512,23 +5785,23 @@ export default function AgentSimulator() {
                             const activeAgent = agents.find(
                               (a) => a.id === selectedAgent
                             );
-                            if (!activeAgent) return "Agent Interaction";
+                            if (!activeAgent) return t("Agent Interaction");
 
                             // Return appropriate title based on agent type
                             switch (activeAgent.type) {
                               case "financial":
                                 return simulationResults
-                                  ? "Financial Simulation Results"
-                                  : "Financial Agent";
+                                  ? t("Financial Simulation Results")
+                                  : t("Financial Agent");
                               case "education":
-                                return "Education Resources";
+                                return t("Education Resources");
                               case "wellness":
-                                return "Wellness Insights";
+                                return t("Wellness Insights");
                               default:
-                                return `${activeAgent.name} Interaction`;
+                                return `${activeAgent.name} ${t("Interaction")}`;
                             }
                           })()
-                        : "Agent Interaction"}
+                        : t("Agent Interaction")}
                     </h2>
 
                     {/* Agent-specific badges */}
@@ -5570,8 +5843,8 @@ export default function AgentSimulator() {
 
                                     <div className="px-2 py-1 text-sm font-medium text-white/90">
                                       {currentMonth <= 12
-                                        ? `Month ${currentMonth}`
-                                        : `Future ${currentMonth - 12}`}
+                                        ? `${t("Month")} ${currentMonth}`
+                                        : `${t("Future")} ${currentMonth - 12}`}
                                     </div>
 
                                     <button
@@ -5609,7 +5882,7 @@ export default function AgentSimulator() {
                             return (
                               <div className="ml-4 flex items-center">
                                 <span className="text-sm text-emerald-300 bg-emerald-500/20 px-3 py-1 rounded-full">
-                                  Learning Resources
+                                  {t("Learning Resources")}
                                 </span>
                               </div>
                             );
@@ -5617,7 +5890,7 @@ export default function AgentSimulator() {
                             return (
                               <div className="ml-4 flex items-center">
                                 <span className="text-sm text-orange-300 bg-orange-500/20 px-3 py-1 rounded-full">
-                                  Wellness Plan
+                                  {t("Wellness Plan")}
                                 </span>
                               </div>
                             );
@@ -5643,28 +5916,28 @@ export default function AgentSimulator() {
                                 onClick={fetchSimulationResults}
                                 disabled={isLoadingResults}
                                 className="flex items-center px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg text-sm transition-colors"
-                                title="Refresh financial simulation results"
+                                title={t("Refresh financial simulation results")}
                               >
                                 {isLoadingResults ? (
                                   <div className="animate-pulse w-2 h-2 rounded-full bg-blue-400 mr-2"></div>
                                 ) : (
                                   <RotateCcw size={14} className="mr-2" />
                                 )}
-                                <span>Refresh</span>
+                                <span>{t("Refresh")}</span>
                               </button>
                             );
                           case "education":
                             return (
                               <button className="flex items-center px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg text-sm transition-colors">
                                 <BookOpen size={14} className="mr-2" />
-                                <span>Resources</span>
+                                <span>{t("Resources")}</span>
                               </button>
                             );
                           case "wellness":
                             return (
                               <button className="flex items-center px-3 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 rounded-lg text-sm transition-colors">
                                 <Heart size={14} className="mr-2" />
-                                <span>Plan</span>
+                                <span>{t("Plan")}</span>
                               </button>
                             );
                           default:
@@ -5683,9 +5956,9 @@ export default function AgentSimulator() {
                           <div className="w-16 h-16 rounded-full bg-orange-500/20 flex items-center justify-center mb-4">
                             <MessageSquare size={32} className="text-orange-400" />
                           </div>
-                          <p className="text-center font-medium text-lg mb-2 text-white">Welcome to Agent Simulator</p>
+                          <p className="text-center font-medium text-lg mb-2 text-white">{t("Welcome to Agent Simulator")}</p>
                           <p className="text-center text-sm text-gray-300 max-w-md mb-6">
-                            Select an agent from the right panel to begin your interactive session. Each agent specializes in different areas to help you achieve your goals.
+                            {t("Select an agent from the right panel to begin your interactive session. Each agent specializes in different areas to help you achieve your goals.")}
                           </p>
 
                         </>
@@ -5694,8 +5967,8 @@ export default function AgentSimulator() {
                           <Sparkles size={40} className="mb-4 text-orange-500/50" />
                           <p className="text-center">
                             {isSimulating
-                              ? "Start the simulation to begin agent interaction"
-                              : "Upload a PDF or send a message to start learning"}
+                              ? t("Start the simulation to begin agent interaction")
+                              : t("Upload a PDF or send a message to start learning")}
                           </p>
                           <p className="text-center text-sm mt-2">
                             {isSimulating
@@ -5721,9 +5994,8 @@ export default function AgentSimulator() {
 
                           switch (activeAgent.type) {
                             case "financial":
-                              return (
-                                simulationResults && renderSimulationResults()
-                              );
+                              // Show simulation results if available
+                              return simulationResults ? renderSimulationResults() : null;
                             case "education":
                               return (
                                 <div className="bg-emerald-900/20 rounded-lg p-4 my-4 border border-emerald-500/30">
@@ -5757,25 +6029,27 @@ export default function AgentSimulator() {
                                         </div>
                                       </div>
 
-                                      {/* Lesson Content */}
-                                      {lessonData.explanation && (
+                                      {/* Lesson Content - Handle multiple possible field names */}
+                                      {(lessonData.explanation || lessonData.content || lessonData.text) && (
                                         <div className="bg-white/10 p-4 rounded-lg border border-amber-500/30">
                                           <h4 className="text-amber-400 font-semibold mb-2 flex items-center">
                                             <span className="bg-amber-500 w-6 h-6 rounded-full flex items-center justify-center mr-2 text-white text-sm font-bold">1</span>
                                             Explanation
                                           </h4>
-                                          <p className="text-white/90 leading-relaxed">{lessonData.explanation}</p>
+                                          <p className="text-white/90 leading-relaxed whitespace-pre-wrap">
+                                            {lessonData.explanation || lessonData.content || lessonData.text}
+                                          </p>
                                         </div>
                                       )}
 
-                                      {/* Activity */}
-                                      {lessonData.activity && (
+                                      {/* Activity - Handle both object and other formats */}
+                                      {(lessonData.activity || lessonData.enhanced_features?.activity) && (
                                         <div className="bg-indigo-900/30 p-4 rounded-lg border border-indigo-500/30">
                                           <h4 className="text-indigo-400 font-semibold mb-2 flex items-center">
                                             <span className="bg-indigo-500 w-6 h-6 rounded-full flex items-center justify-center mr-2 text-white text-sm font-bold">2</span>
                                             Activity
                                           </h4>
-                                          {renderActivityContent(lessonData.activity)}
+                                          {renderActivityContent(lessonData.activity || lessonData.enhanced_features?.activity)}
                                         </div>
                                       )}
 
@@ -5787,6 +6061,29 @@ export default function AgentSimulator() {
                                             Question to Consider
                                           </h4>
                                           {renderQuestionContent(lessonData.question)}
+                                        </div>
+                                      )}
+
+                                      {/* Show raw content if no structured fields exist */}
+                                      {!lessonData.explanation && !lessonData.content && !lessonData.text && 
+                                       !lessonData.activity && !lessonData.enhanced_features?.activity && 
+                                       !lessonData.question && (
+                                        <div className="bg-white/10 p-4 rounded-lg border border-amber-500/30">
+                                          <h4 className="text-amber-400 font-semibold mb-2 flex items-center">
+                                            <span className="bg-amber-500 w-6 h-6 rounded-full flex items-center justify-center mr-2 text-white text-sm font-bold">📚</span>
+                                            Lesson Content
+                                          </h4>
+                                          <div className="text-white/90 leading-relaxed">
+                                            <p className="mb-2">Lesson data received but content structure is unexpected.</p>
+                                            <details className="mt-2">
+                                              <summary className="cursor-pointer text-amber-300 hover:text-amber-200 text-sm">
+                                                View raw data (for debugging)
+                                              </summary>
+                                              <pre className="mt-2 text-xs bg-black/30 p-2 rounded overflow-auto max-h-40">
+                                                {JSON.stringify(lessonData, null, 2)}
+                                              </pre>
+                                            </details>
+                                          </div>
                                         </div>
                                       )}
 
@@ -5876,6 +6173,22 @@ export default function AgentSimulator() {
                                 </div>
                               );
                             case "wellness":
+                              // Only show wellness guidance component at the very start when there are no messages
+                              // Once any message appears (user or bot), hide this component completely
+                              // Filter out system messages to check for actual conversation messages
+                              const hasAnyMessages = messages.some(msg => 
+                                msg.sender === "user" || 
+                                msg.sender === "wellness-agent" || 
+                                msg.agentType === "wellness" ||
+                                (msg.sender !== "system" && msg.sender !== "learning-agent")
+                              );
+                              
+                              // Hide the component once any conversation has started
+                              if (hasAnyMessages) {
+                                return null; // Don't show after conversation starts
+                              }
+                              
+                              // Only show at the very beginning when no messages exist
                               return (
                                 <div className="bg-orange-900/20 rounded-lg p-4 my-4 border border-orange-500/30">
                                   <div className="flex items-center justify-between mb-4">
@@ -5886,52 +6199,17 @@ export default function AgentSimulator() {
                                       />
                                       Wellness Guidance
                                     </h3>
-
-
                                   </div>
 
-                                  {/* Show wellness response if available */}
-                                  {wellnessResponse ? (
-                                    <div className="space-y-4">
-                                      {/* Current Session Info */}
-                                      <div className="bg-orange-800/20 rounded-lg p-3 border border-orange-600/30">
-                                        <div className="text-orange-300 text-sm font-medium mb-1">Current Session</div>
-                                        <div className="text-white/90">
-                                          <span className="font-medium">Type:</span> {wellnessType === "emotional" ? "Emotional Wellness" : "Financial Wellness"}
-                                        </div>
-                                        {wellnessType === "emotional" && (
-                                          <div className="text-white/90">
-                                            <span className="font-medium">Mood:</span> {moodScore}/10 •
-                                            <span className="font-medium ml-2">Stress:</span> {stressLevel}/10
-                                          </div>
-                                        )}
-                                      </div>
-
-                                      {/* Wellness guidance will be displayed in the messages area above */}
-                                      <div className="text-center py-6">
-                                        <div className="text-white/70 mb-4">
-                                          <Heart size={48} className="mx-auto mb-3 text-orange-400/50" />
-                                          <p className="text-lg font-medium mb-2">Wellness Guidance Active</p>
-                                          <p className="text-sm">
-                                            Your wellness responses and guidance will appear in the conversation above.
-                                            Use the form in the timeline to ask new wellness questions.
-                                          </p>
-                                        </div>
-                                      </div>
+                                  <div className="text-center py-6">
+                                    <div className="text-white/70 mb-4">
+                                      <Heart size={48} className="mx-auto mb-3 text-orange-400/50" />
+                                      <p className="text-lg font-medium mb-2">Ready for Wellness Guidance</p>
+                                      <p className="text-sm">
+                                        Fill in your wellness details in the timeline form and click "Get Wellness Guidance" to receive personalized support.
+                                      </p>
                                     </div>
-                                  ) : (
-                                    <div className="text-center py-6">
-                                      <div className="text-white/70 mb-4">
-                                        <Heart size={48} className="mx-auto mb-3 text-orange-400/50" />
-                                        <p className="text-lg font-medium mb-2">Ready for Wellness Guidance</p>
-                                        <p className="text-sm">
-                                          Fill in your wellness details in the timeline form and click "Get Wellness Guidance" to receive personalized support.
-                                        </p>
-                                      </div>
-
-
-                                    </div>
-                                  )}
+                                  </div>
                                 </div>
                               );
                             default:
@@ -5944,8 +6222,15 @@ export default function AgentSimulator() {
                   )}
                 </div>
 
-                {/* Input Area - ChatBot Style - Only show when agent is selected */}
-                {selectedAgent && (
+                {/* Input Area - ChatBot Style - Only show when agent is selected and not wellness/education/financial */}
+                {selectedAgent && (() => {
+                  const activeAgent = agents.find((a) => a.id === selectedAgent);
+                  // Hide input area for wellness, education, and financial bots
+                  if (activeAgent && (activeAgent.type === "wellness" || activeAgent.type === "education" || activeAgent.type === "financial")) {
+                    return false;
+                  }
+                  return true;
+                })() && (
                 <div className="mt-4 relative">
                   {/* PDF display area - only show when PDFs are selected */}
                   {!isSimulating && selectedPdfs.length > 0 && (
@@ -6008,7 +6293,7 @@ export default function AgentSimulator() {
                           className={`p-2 mx-1 rounded-lg hover:bg-white/10 transition-colors relative ${
                             activePdfId ? "bg-purple-900/20" : ""
                           }`}
-                          title="Pin a PDF for chat"
+                          title={t("Pin a PDF for chat")}
                         >
                           <Pin
                             size={20}
@@ -6039,8 +6324,8 @@ export default function AgentSimulator() {
                         }}
                         placeholder={
                           activePdfId
-                            ? "Ask questions about your PDF..."
-                            : "Send a message to learn..."
+                            ? t("Ask questions about your PDF...")
+                            : t("Send a message to learn...")
                         }
                         className="w-full bg-transparent text-white px-2 py-3 outline-none resize-none"
                         style={{
@@ -6068,12 +6353,12 @@ export default function AgentSimulator() {
                         color: "white",
                       }}
                     >
-                      Send
+                      {t("Send")}
                     </button>
                   </div>
                   <div className="mt-2 text-center">
                     <p className="text-white/40 text-xs">
-                      Tip: Use Shift+Enter for a new line
+                      {t("Tip: Use Shift+Enter for a new line")}
                     </p>
                   </div>
                 </div>
@@ -6094,7 +6379,7 @@ export default function AgentSimulator() {
                       <Cpu size={18} className="text-orange-400" />
                     </div>
                     <h2 className="text-xl font-bold text-white">
-                      Available Agents
+                      {t("Available Agents")}
                     </h2>
                   </div>
                 </div>
@@ -6136,33 +6421,86 @@ export default function AgentSimulator() {
                             ? `0 4px 20px -2px ${agent.color}20`
                             : "",
                       }}
-                      onClick={() => {
-                        // If simulation is running, activate the clicked agent and deactivate others
-                        if (isSimulating) {
-                          // Update agent statuses
-                          setAgents(
-                            agents.map((a) => ({
-                              ...a,
-                              status: a.id === agent.id ? "active" : "idle",
-                            }))
-                          );
-
-                          // Add system message about agent switch
-                          setMessages((prev) => [
-                            ...prev,
-                            {
-                              id: generateUniqueId(),
-                              sender: "system",
-                              content: `Switched to ${agent.name}.`,
-                              timestamp: new Date().toISOString(),
-                            },
-                          ]);
-
-                          toast.success(`Switched to ${agent.name}`);
-                        }
-
-                        // Set the selected agent (always select, never deselect)
+                      onClick={async () => {
+                        // Check if switching to a different agent
+                        const isSwitchingAgent = selectedAgent !== agent.id;
+                        
+                        // Always clear messages and start fresh when clicking an agent
+                        setMessages([]);
+                        
+                        // Clear agent-specific state
+                        setWellnessResponse(null);
+                        setLessonData(null);
+                        setLessonTaskId(null);
+                        
+                        // Set the selected agent first
                         setSelectedAgent(agent.id);
+                        
+                        // Update agent statuses - activate clicked agent, deactivate others
+                        setAgents(
+                          agents.map((a) => ({
+                            ...a,
+                            status: a.id === agent.id ? "active" : "idle",
+                          }))
+                        );
+
+                        // Start simulation for the selected agent
+                        setIsSimulating(true);
+                        
+                        // Add fresh start message for the new agent
+                        const startMessage = {
+                          id: generateUniqueId(),
+                          sender: "system",
+                          content: `${t("Agent simulation started.")} ${agent.name} ${t("is active and ready to assist.")}`,
+                          timestamp: new Date().toISOString(),
+                        };
+                        setMessages([startMessage]);
+                        
+                        // Log agent start in Supabase
+                        try {
+                          const userId = user?.id || "anonymous-user";
+                          await agentLogsService.logAgentStart({
+                            userId,
+                            agentId: agent.id,
+                            agentName: agent.name,
+                            agentType: agent.type,
+                          });
+                        } catch (error) {
+                          console.error("Error logging agent start:", error);
+                        }
+                        
+                        // Call the API to start the simulation
+                        try {
+                          const payload = {
+                            agentId: agent.id,
+                            userId: user?.id || "anonymous-user",
+                          };
+                          
+                          // Add agent-specific profile data
+                          if (agent.type === "financial") {
+                            const { uniqueId: _uniqueId, ...financialProfileData } = financialProfile;
+                            payload.financialProfile = financialProfileData;
+                          } else if (agent.type === "education") {
+                            payload.eduMentorProfile = eduMentorProfile;
+                          } else if (agent.type === "wellness") {
+                            payload.wellnessProfile = {
+                              wellnessType: wellnessProfile.wellnessType,
+                              moodScore: wellnessProfile.moodScore,
+                              stressLevel: wellnessProfile.stressLevel,
+                              wellnessGoals: wellnessProfile.wellnessGoals,
+                              preferredActivities: wellnessProfile.preferredActivities,
+                              stressTriggers: wellnessProfile.stressTriggers,
+                              copingStrategies: wellnessProfile.copingStrategies,
+                            };
+                          }
+                          
+                          await startAgentSimulation(payload).unwrap();
+                          toast.success(`${agent.name} ${t("is now active")}`);
+                        } catch (error) {
+                          console.error("Failed to start simulation:", error);
+                          // Continue with local simulation even if API call fails
+                          toast.success(`${agent.name} ${t("is now active")} (local mode)`);
+                        }
                       }}
                     >
                       <div className="flex justify-between items-center">
@@ -6185,7 +6523,7 @@ export default function AgentSimulator() {
                           </div>
                           <div>
                             <h3 className="font-semibold text-white text-lg">
-                              {agent.name}
+                              {t(agent.name)}
                             </h3>
                             <span
                               className="text-xs px-2 py-1 rounded-full font-medium"
@@ -6196,7 +6534,7 @@ export default function AgentSimulator() {
                                 boxShadow: `0 2px 4px ${agent.color}20`,
                               }}
                             >
-                              {agent.type}
+                              {t(agent.type)}
                             </span>
                           </div>
                         </div>
@@ -6216,7 +6554,7 @@ export default function AgentSimulator() {
                                   : "bg-gray-400 shadow-[0_0_4px_rgba(156,163,175,0.4)]"
                               }`}
                             ></span>
-                            {agent.status}
+                            {t(agent.status)}
                           </div>
                         </div>
                       </div>
@@ -6224,14 +6562,14 @@ export default function AgentSimulator() {
                       {/* Agent description */}
                       <div className="mt-2 p-2 rounded-md bg-black/20 border border-white/5">
                         <p className="text-xs text-white/80 italic leading-tight">
-                          "{agent.description}"
+                          "{t(agent.description)}"
                         </p>
                       </div>
 
                       {/* Confidence bar */}
                       <div className="mt-3">
                         <div className="flex justify-between items-center text-xs font-medium">
-                          <span className="text-white/80">Confidence</span>
+                          <span className="text-white/80">{t("Confidence")}</span>
                           <span
                             className="px-2 py-1 rounded-full font-medium"
                             style={{

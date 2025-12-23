@@ -9,6 +9,7 @@ import {
 } from "../store/avatarSlice";
 import StorageQuotaManager from "../utils/storageQuotaManager";
 import ImageAvatarSettings from "./ImageAvatarSettings";
+import { useTranslation } from "react-i18next";
 
 
 // Inject custom scrollbar styles
@@ -85,6 +86,7 @@ export default function AvatarSettingsTabs({
   // Redux dispatch
   dispatch,
 }) {
+  const { t } = useTranslation();
   // Inject scrollbar styles on component mount
   useEffect(() => {
     injectScrollbarStyles();
@@ -176,7 +178,7 @@ export default function AvatarSettingsTabs({
 
       return (
         <div className="space-y-3">
-          <h3 className="text-white font-medium text-sm">{label} Position</h3>
+          <h3 className="text-white font-medium text-sm">{t(label)} {t("Position")}</h3>
 
           {/* Compact grid layout for X, Y, Z */}
           <div className="grid grid-cols-3 gap-2">
@@ -262,7 +264,7 @@ export default function AvatarSettingsTabs({
 
       return (
         <div className="space-y-3">
-          <h3 className="text-white font-medium text-sm">{label} Rotation</h3>
+          <h3 className="text-white font-medium text-sm">{t(label)} {t("Rotation")}</h3>
 
           {/* Compact grid layout for X, Y, Z */}
           <div className="grid grid-cols-3 gap-2">
@@ -311,7 +313,7 @@ export default function AvatarSettingsTabs({
         </div>
       );
     },
-    []
+    [t, dispatch]
   );
 
   const renderScaleControl = useCallback((scale, scaleAction, label) => {
@@ -336,9 +338,9 @@ export default function AvatarSettingsTabs({
 
     return (
       <div className="space-y-3">
-        <h3 className="text-white font-medium text-sm">{label} Scale</h3>
+        <h3 className="text-white font-medium text-sm">{t(label)} {t("Scale")}</h3>
         <div>
-          <label className="block text-white/70 text-xs mb-1">Size</label>
+          <label className="block text-white/70 text-xs mb-1">{t("Size")}</label>
           <input
             type="number"
             min="0.1"
@@ -351,7 +353,7 @@ export default function AvatarSettingsTabs({
         </div>
       </div>
     );
-  }, []);
+  }, [t, dispatch]);
 
   return (
     <div className="h-full flex flex-col min-h-0">
@@ -360,7 +362,7 @@ export default function AvatarSettingsTabs({
         {/* Fixed Header Section */}
         <div className="p-4 pb-0 flex-shrink-0">
           <h2 className="text-lg font-semibold text-white mb-4">
-            Avatar Settings
+            {t("Avatar Settings")}
           </h2>
         </div>
 
@@ -371,7 +373,7 @@ export default function AvatarSettingsTabs({
               {/* Pin Mode Toggle */}
               <div className="px-4 py-3 bg-black/20 rounded-lg border border-white/10">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-white font-medium">Pin Mode</h3>
+                  <h3 className="text-white font-medium">{t("Pin Mode")}</h3>
                   <button
                     onClick={handlePinModeToggle}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
@@ -412,14 +414,14 @@ export default function AvatarSettingsTabs({
               {selectedAvatar?.mediaType !== 'image' && (
                 <div className="p-3 bg-black/10 rounded-lg border border-white/5">
                   <h4 className="text-white/80 text-xs font-medium mb-2">
-                    3D Avatar Tips
+                    {t("3D Avatar Tips")}
                   </h4>
                   <ul className="text-white/60 text-xs space-y-1">
-                    <li>• Position: Adjust 3D position in space</li>
-                    <li>• Rotation: Change avatar orientation</li>
-                    <li>• Scale: Modify size (added to base scale)</li>
-                    <li>• Drag avatar to move around screen</li>
-                    <li>• Use scroll wheel to navigate settings</li>
+                    <li>• {t("Position: Adjust 3D position in space")}</li>
+                    <li>• {t("Rotation: Change avatar orientation")}</li>
+                    <li>• {t("Scale: Modify size (added to base scale)")}</li>
+                    <li>• {t("Drag avatar to move around screen")}</li>
+                    <li>• {t("Use scroll wheel to navigate settings")}</li>
                   </ul>
                 </div>
               )}
@@ -439,7 +441,7 @@ export default function AvatarSettingsTabs({
                   : "bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30 hover:text-green-300"
               }`}
             >
-              {hasUnsavedChanges ? "⚠️ Save Now" : "✅ Saved & Synced"}
+              {hasUnsavedChanges ? t("⚠️ Save Now") : t("✅ Saved & Synced")}
             </button>
 
             {/* Reset Buttons */}
@@ -461,21 +463,21 @@ export default function AvatarSettingsTabs({
                 }}
                 className="px-3 py-2 bg-white/10 text-white/70 rounded-lg border border-white/20 hover:bg-white/20 hover:text-white transition-all text-xs"
               >
-                Reset {selectedAvatar?.mediaType === 'image' ? 'Image' : 'Pin'}
+                {t("Reset")} {selectedAvatar?.mediaType === 'image' ? t('Image') : t('Pin')}
               </button>
 
               <button
                 onClick={resetPinnedAvatar}
                 className="px-3 py-2 bg-red-500/20 text-red-400 rounded-lg border border-red-500/30 hover:bg-red-500/30 hover:text-red-300 transition-all text-xs"
               >
-                Reset All
+                {t("Reset All")}
               </button>
             </div>
 
             {/* Last Saved Indicator */}
             {selectedAvatar?.lastUpdated && (
               <div className="text-white/40 text-xs pt-2">
-                Last saved:{" "}
+                {t("Last saved")}:{" "}
                 {new Date(selectedAvatar.lastUpdated).toLocaleString()}
               </div>
             )}

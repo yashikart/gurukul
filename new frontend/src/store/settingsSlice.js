@@ -1,4 +1,5 @@
 import { createSlice } from '@reduxjs/toolkit';
+import i18n from '../i18n';
 
 // Helper function to get initial settings from localStorage
 const getInitialSettings = () => {
@@ -62,6 +63,10 @@ export const settingsSlice = createSlice({
     setLanguage: (state, action) => {
       state.language = action.payload;
       saveSettingsToStorage({ ...state });
+      // Sync with i18n
+      i18n.changeLanguage(action.payload);
+      // Update HTML attribute
+      document.documentElement.setAttribute('data-language', action.payload);
     },
     setNotifications: (state, action) => {
       state.notifications = action.payload;
@@ -87,6 +92,12 @@ export const settingsSlice = createSlice({
         } else {
           document.documentElement.classList.remove('dark');
         }
+      }
+      
+      // Handle language change
+      if ('language' in action.payload) {
+        i18n.changeLanguage(action.payload.language);
+        document.documentElement.setAttribute('data-language', action.payload.language);
       }
     },
   },

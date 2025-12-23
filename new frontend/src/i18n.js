@@ -26,6 +26,12 @@ i18n.use(initReactI18next).init({
     hindi: {
       translation: translations.hindi,
     },
+    marathi: {
+      translation: translations.marathi,
+    },
+    arabic: {
+      translation: translations.arabic,
+    },
   },
   lng: getInitialLanguage(),
   fallbackLng: "english",

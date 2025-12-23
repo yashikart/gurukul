@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from "react";
 import GlassContainer from "../components/GlassContainer";
 import { useSettings } from "../hooks/useSettings";
-import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../supabaseClient";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { useUser } from "@clerk/clerk-react";
 
 export default function Settings() {
   const {
@@ -19,9 +17,9 @@ export default function Settings() {
     updateMultipleSettings,
   } = useSettings();
 
-  const { user, resetPassword, logout } = useAuth();
   const { t } = useTranslation();
-  const { isSignedIn, user: clerkUser } = useUser();
+  const [user, setUser] = useState(null);
+  const [session, setSession] = useState(null);
 
   // Local state for form values (to avoid immediate changes until saved)
   const [formValues, setFormValues] = useState({
@@ -32,6 +30,47 @@ export default function Settings() {
     audioEnabled,
     audioVolume,
   });
+
+  // Get user session
+  useEffect(() => {
+    const fetchSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
+      if (session) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email,
+          user_metadata: {
+            avatar_url: session.user.user_metadata?.avatar_url || null,
+            full_name: session.user.user_metadata?.full_name || session.user.email || null,
+          },
+        });
+      }
+    };
+
+    fetchSession();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email,
+          user_metadata: {
+            avatar_url: session.user.user_metadata?.avatar_url || null,
+            full_name: session.user.user_metadata?.full_name || session.user.email || null,
+          },
+        });
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Update local state when global settings change
   useEffect(() => {
@@ -62,11 +101,11 @@ export default function Settings() {
     // Update global settings (will save to localStorage)
     updateMultipleSettings(formValues);
 
-    // If we wanted to save to database for logged in users:
-    if (user) {
+    // If we have a user session, save to database
+    if (session) {
       try {
         const { error } = await supabase.from("user_settings").upsert({
-          user_id: user.id,
+          user_id: session.user.id,
           settings: formValues,
         });
 
@@ -83,13 +122,17 @@ export default function Settings() {
   // Handle password change
   const handleChangePassword = async () => {
     try {
-      const result = await resetPassword(user?.email);
-
-      if (result.success) {
-        toast.success(t("Password reset email sent! Please check your inbox."));
-      } else {
-        throw new Error(result.error);
+      if (!session?.user?.email) {
+        throw new Error("No user found");
       }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(session.user.email, {
+        redirectTo: window.location.origin + "/forgotpassword",
+      });
+
+      if (error) throw error;
+
+      toast.success(t("Password reset email sent! Please check your inbox."));
     } catch (error) {
       console.error("Error sending password reset:", error);
       toast.error(t("Failed to send password reset email. Please try again."));
@@ -104,21 +147,23 @@ export default function Settings() {
     // Perform account deletion
     try {
       // First, get the current user's ID
-      if (!isSignedIn || !clerkUser) {
+      if (!session) {
         throw new Error("No user found");
       }
 
-      console.log("Deleting user account:", clerkUser.id);
+      // Delete user data from Supabase
+      const { error } = await supabase.auth.admin.deleteUser(session.user.id);
+      
+      if (error) throw error;
 
-      // With Clerk, actual account deletion should be done server-side via Clerk Admin API.
-      // Here we just sign the user out and show a message.
-      toast.success(t("Account deletion requested. You will be signed out."));
+      // Sign out the user
+      await supabase.auth.signOut();
 
-      await logout();
-      localStorage.clear();
-
+      toast.success(t("Account deleted successfully."));
+      
+      // Redirect to sign in page
       setTimeout(() => {
-        window.location.href = "/signin?deleted=true";
+        window.location.href = "/signin";
       }, 2000);
     } catch (error) {
       console.error("Error deleting account:", error);
@@ -199,9 +244,45 @@ export default function Settings() {
               </button>
             </div>
           </div>
+
+          <div>
+            <label className="block text-white mb-2">{t("Theme")}</label>
+            <div className="flex bg-white/5 p-1.5 rounded-xl max-w-md">
+              <button
+                onClick={() => handleChange("theme", "light")}
+                className={`flex-1 px-4 py-2.5 rounded-lg no-scale transition-all ${
+                  formValues.theme === "light"
+                    ? "bg-[#FF9933] text-white shadow-md"
+                    : "bg-white/10 text-white hover:bg-white/15"
+                }`}
+              >
+                {t("Light")}
+              </button>
+              <button
+                onClick={() => handleChange("theme", "dark")}
+                className={`flex-1 px-4 py-2.5 mx-2 rounded-lg no-scale transition-all ${
+                  formValues.theme === "dark"
+                    ? "bg-[#FF9933] text-white shadow-md"
+                    : "bg-white/10 text-white hover:bg-white/15"
+                }`}
+              >
+                {t("Dark")}
+              </button>
+              <button
+                onClick={() => handleChange("theme", "auto")}
+                className={`flex-1 px-4 py-2.5 rounded-lg no-scale transition-all ${
+                  formValues.theme === "auto"
+                    ? "bg-[#FF9933] text-white shadow-md"
+                    : "bg-white/10 text-white hover:bg-white/15"
+                }`}
+              >
+                {t("Auto")}
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Preferences */}
+        {/* Notification Settings */}
         <div
           className="p-6 rounded-xl"
           style={{
@@ -217,143 +298,148 @@ export default function Settings() {
               fontFamily: "Tiro Devanagari Hindi, serif",
             }}
           >
-            {t("Preferences")}
+            {t("Notifications")}
           </h3>
 
-          <div className="mb-4">
-            <label className="block text-white mb-2">{t("Language")}</label>
-            <div className="flex bg-white/5 p-1.5 rounded-xl max-w-md">
-              <button
-                onClick={() => handleChange("language", "english")}
-                className={`flex-1 px-4 py-2.5 rounded-lg no-scale transition-all ${
-                  formValues.language === "english"
-                    ? "bg-[#FF9933] text-white shadow-md"
-                    : "bg-white/10 text-white hover:bg-white/15"
-                }`}
-              >
-                {t("English")}
-              </button>
-              <button
-                onClick={() => handleChange("language", "hindi")}
-                className={`flex-1 px-4 py-2.5 ml-2 rounded-lg no-scale transition-all ${
-                  formValues.language === "hindi"
-                    ? "bg-[#FF9933] text-white shadow-md"
-                    : "bg-white/10 text-white hover:bg-white/15"
-                }`}
-              >
-                {t("Hindi")}
-              </button>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <label className="flex items-center text-white cursor-pointer">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-white">{t("Enable Notifications")}</span>
+            <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
                 checked={formValues.notifications}
-                onChange={() =>
-                  handleChange("notifications", !formValues.notifications)
-                }
-                className="mr-2 w-5 h-5 accent-[#FF9933]"
+                onChange={(e) => handleChange("notifications", e.target.checked)}
+                className="sr-only peer"
               />
-              <span>{t("Enable Notifications")}</span>
+              <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FF9933]"></div>
             </label>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-white">{t("Audio Feedback")}</span>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formValues.audioEnabled}
+                onChange={(e) => handleChange("audioEnabled", e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FF9933]"></div>
+            </label>
+          </div>
+
+          {formValues.audioEnabled && (
+            <div className="mt-4">
+              <label className="block text-white mb-2">{t("Volume")}</label>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={formValues.audioVolume}
+                onChange={(e) =>
+                  handleChange("audioVolume", parseInt(e.target.value))
+                }
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[#FF9933]"
+              />
+              <div className="text-right text-white text-sm mt-1">
+                {formValues.audioVolume}%
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Account Settings */}
+        <div
+          className="p-6 rounded-xl md:col-span-2"
+          style={{
+            background: "rgba(255, 255, 255, 0.1)",
+            backdropFilter: "blur(10px)",
+            border: "1px solid rgba(255, 255, 255, 0.18)",
+          }}
+        >
+          <h3
+            className="text-2xl font-bold mb-4 transition-all duration-300 hover:bg-gradient-to-r hover:from-white hover:to-[#FF9933] hover:bg-clip-text hover:text-transparent"
+            style={{
+              color: "#FFFFFF",
+              fontFamily: "Tiro Devanagari Hindi, serif",
+            }}
+          >
+            {t("Account")}
+          </h3>
+
+          {user && (
+            <div className="mb-6">
+              <div className="flex items-center mb-4">
+                <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center mr-4">
+                  <span className="text-white font-bold">
+                    {user.user_metadata?.full_name?.charAt(0) ||
+                      user.email?.charAt(0) ||
+                      "U"}
+                  </span>
+                </div>
+                <div>
+                  <div className="text-white font-medium">
+                    {user.user_metadata?.full_name || user.email}
+                  </div>
+                  <div className="text-gray-400 text-sm">{user.email}</div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <GlassButton onClick={handleChangePassword} variant="secondary">
+                  {t("Change Password")}
+                </GlassButton>
+                <GlassButton
+                  onClick={() => setShowDeleteConfirm(true)}
+                  variant="danger"
+                >
+                  {t("Delete Account")}
+                </GlassButton>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <GlassButton onClick={saveSettings} variant="primary">
+              {t("Save Settings")}
+            </GlassButton>
           </div>
         </div>
       </div>
 
-      {/* Account Settings */}
-      <div
-        className="p-6 rounded-xl mt-8"
-        style={{
-          background: "rgba(255, 255, 255, 0.1)",
-          backdropFilter: "blur(10px)",
-          border: "1px solid rgba(255, 255, 255, 0.18)",
-        }}
-      >
-        <h3
-          className="text-2xl font-bold mb-4 transition-all duration-300 hover:bg-gradient-to-r hover:from-white hover:to-[#FF9933] hover:bg-clip-text hover:text-transparent"
-          style={{
-            color: "#FFFFFF",
-            fontFamily: "Tiro Devanagari Hindi, serif",
-          }}
-        >
-          {t("Account")}
-        </h3>
-
-        <div className="mb-4">
-          <button
-            onClick={handleChangePassword}
-            className="px-5 py-3 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-all mb-2 w-full md:w-auto"
-          >
-            {t("Change Password")}
-          </button>
-        </div>
-
-        <div>
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="px-5 py-3 rounded-lg bg-red-500/30 text-white hover:bg-red-500/40 transition-all w-full md:w-auto"
-          >
-            {t("Delete Account")}
-          </button>
-          {showDeleteConfirm &&
-            createPortal(
-              <>
-                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50" />
-                <div className="fixed inset-0 z-60 flex items-center justify-center">
-                  <div
-                    className="relative w-full max-w-md mx-4 p-6 rounded-3xl"
-                    style={{
-                      background: "rgba(30, 30, 40, 0.25)",
-                      backdropFilter: "blur(20px)",
-                      WebkitBackdropFilter: "blur(20px)",
-                      border: "1px solid rgba(255, 255, 255, 0.225)",
-                    }}
-                  >
-                    <h4 className="text-lg font-semibold text-white mb-4">
-                      {t(
-                        "Are you sure you want to delete your account? This action cannot be undone."
-                      )}
-                    </h4>
-                    <div className="flex justify-end space-x-4">
-                      <button
-                        onClick={() => setShowDeleteConfirm(false)}
-                        className="px-4 py-2 rounded-lg bg-white/20 text-white hover:bg-white/30"
-                      >
-                        {t("Cancel")}
-                      </button>
-                      <button
-                        onClick={async () => {
-                          setShowDeleteConfirm(false);
-                          await handleDeleteAccount();
-                        }}
-                        className="px-4 py-2 rounded-lg bg-red-700 text-white hover:bg-red-900"
-                      >
-                        {t("Confirm")}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </>,
-              document.body
-            )}
-        </div>
-      </div>
-
-      <div className="mt-8 text-center">
-        <button
-          onClick={saveSettings}
-          className="px-8 py-3 rounded-lg text-white font-medium transition-all hover:scale-105"
-          style={{
-            background: "rgba(255, 153, 51, 0.7)",
-            backdropFilter: "blur(10px)",
-            boxShadow: "0 4px 15px rgba(255, 153, 51, 0.3)",
-          }}
-        >
-          {t("Save Changes")}
-        </button>
-      </div>
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm &&
+        createPortal(
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div
+              className="rounded-2xl p-6 max-w-md w-full"
+              style={{
+                background: "rgba(30, 30, 46, 0.95)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+              }}
+            >
+              <h3 className="text-2xl font-bold text-white mb-4">
+                {t("Confirm Account Deletion")}
+              </h3>
+              <p className="text-gray-300 mb-6">
+                {t(
+                  "Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently lost."
+                )}
+              </p>
+              <div className="flex justify-end space-x-3">
+                <GlassButton
+                  onClick={() => setShowDeleteConfirm(false)}
+                  variant="secondary"
+                >
+                  {t("Cancel")}
+                </GlassButton>
+                <GlassButton onClick={handleDeleteAccount} variant="danger">
+                  {t("Delete Account")}
+                </GlassButton>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </GlassContainer>
   );
 }

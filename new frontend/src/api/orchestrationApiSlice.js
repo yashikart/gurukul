@@ -1,12 +1,13 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import { API_BASE_URL } from "../config";
+import { WELLNESS_API_BASE_URL } from "../config";
 import ttsService from "../services/ttsService";
 
 // Create orchestration API slice for enhanced educational features
+// Note: Orchestration system runs on port 8006 (Wellness API)
 export const orchestrationApiSlice = createApi({
   reducerPath: "orchestrationApi",
   baseQuery: fetchBaseQuery({
-    baseUrl: API_BASE_URL,
+    baseUrl: WELLNESS_API_BASE_URL,
     timeout: 90000, // 90 second timeout for orchestration calls
     prepareHeaders: (headers, { getState }) => {
       // Add any auth headers if needed
@@ -170,6 +171,24 @@ export const orchestrationApiSlice = createApi({
       },
       providesTags: ["IntegrationStatus"],
     }),
+
+    // Ask EduMentor for educational queries
+    // Uses /edumentor endpoint from simple_api.py (port 8006)
+    askEdumentor: builder.mutation({
+      query: ({ query, user_id, quiz_score = null, language = "english" }) => {
+        console.log("🎓 Asking EduMentor:", { query, user_id, quiz_score, language });
+        return {
+          url: "/edumentor",
+          method: "POST",
+          body: {
+            query,
+            user_id: user_id || "guest-user",
+            language,
+          },
+        };
+      },
+      invalidatesTags: ["UserProgress", "UserAnalytics"],
+    }),
   }),
 });
 
@@ -185,6 +204,7 @@ export const {
   useLazyGetIntegrationStatusQuery,
   useCheckOrchestrationHealthQuery,
   useLazyCheckOrchestrationHealthQuery,
+  useAskEdumentorMutation,
 } = orchestrationApiSlice;
 
 // Helper function to check if orchestration is available

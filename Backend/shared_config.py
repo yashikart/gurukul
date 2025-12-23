@@ -147,6 +147,10 @@ def get_service_config(service_name):
     }
     
     # Common configuration for all services
+    # Default Google AI Studio API key
+    default_gemini_key = "AIzaSyDSunIIg6InYPa4yaYhrXKGXO2HTWhi_wc"
+    default_youtube_key = "AIzaSyCJhsvlm7aAhnOBM6oBl1d90s9l67ksfbc"
+    
     config = {
         "service_name": service_name,
         "port": port_mapping.get(service_name, 8000),
@@ -158,10 +162,11 @@ def get_service_config(service_name):
         # API Keys
         "groq_api_key": os.getenv("GROQ_API_KEY"),
         "openai_api_key": os.getenv("OPENAI_API_KEY"),
-        "gemini_api_key": os.getenv("GEMINI_API_KEY"),
+        "gemini_api_key": os.getenv("GEMINI_API_KEY", default_gemini_key),
         "agentops_api_key": os.getenv("AGENTOPS_API_KEY"),
         "llama_api_key": os.getenv("LLAMA_API_KEY"),
         "uniguru_api_key": os.getenv("UNIGURU_API_KEY"),
+        "youtube_api_key": os.getenv("YOUTUBE_API_KEY", default_youtube_key),
         
         # Database URLs
         "mongodb_uri": os.getenv("MONGODB_URI") or os.getenv("MONGO_URI"),

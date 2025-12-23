@@ -1,6 +1,18 @@
-import { apiSlice } from "./apiSlice";
+import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import { CHAT_API_BASE_URL } from "../config";
 
-export const chatApiSlice = apiSlice.injectEndpoints({
+// Create a separate API slice for chat with the correct base URL
+export const chatApiSlice = createApi({
+  reducerPath: "chatApi",
+  baseQuery: fetchBaseQuery({
+    baseUrl: CHAT_API_BASE_URL,
+    prepareHeaders: (headers, { getState }) => {
+      // You can add auth headers here if needed
+      return headers;
+    },
+    timeout: 30000, // 30 second timeout for chat operations
+  }),
+  tagTypes: ["ChatHistory"],
   endpoints: (builder) => ({
     getChatHistory: builder.query({
       query: (userId) => ({

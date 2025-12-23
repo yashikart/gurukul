@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import { TimeContext } from "./TimeContextDef";
-import { useUser } from "@clerk/clerk-react";
+import { useAuth } from "./AuthContext";
 
 export const TimeProvider = ({ children }) => {
   const [totalTimeToday, setTotalTimeToday] = useState(0);
@@ -71,7 +71,8 @@ export const TimeProvider = ({ children }) => {
     setIsLoading(false);
   }, []);
 
-  const { isSignedIn, user } = useUser();
+  const { user } = useAuth();
+  const isSignedIn = !!user;
 
   useEffect(() => {
     if (initRef.current) return;

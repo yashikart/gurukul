@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
 import { useBlobUrlCleanup } from '../hooks/useBlobUrl';
 import blobUrlManager from '../utils/blobUrlManager';
+import { useTranslation } from "react-i18next";
 import { 
   Upload, 
   Trash2, 
@@ -40,6 +41,7 @@ import indexedDBStorage from '../utils/indexedDBStorage';
 import MediaViewer from './MediaViewer';
 
 const CustomModelsTab = () => {
+  const { t } = useTranslation();
   const dispatch = useDispatch();
   const customModels = useSelector(selectCustomModels);
   const customImages = useSelector(selectCustomImages);
@@ -76,7 +78,7 @@ const CustomModelsTab = () => {
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (uploadProgress) {
-        const message = 'Upload in progress. Leaving now will cancel the upload.';
+        const message = t('Upload in progress. Leaving now will cancel the upload.');
         e.preventDefault();
         e.returnValue = message;
         return message;
@@ -85,7 +87,7 @@ const CustomModelsTab = () => {
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [uploadProgress]);
+  }, [uploadProgress, t]);
 
   // Check IndexedDB storage space (much larger capacity)
   const checkStorageSpace = async () => {
@@ -110,14 +112,14 @@ const CustomModelsTab = () => {
 
     let allowedTypes, maxSize, errorMessage;
 
-    if (fileType === 'image') {
+      if (fileType === 'image') {
       allowedTypes = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
       maxSize = 50 * 1024 * 1024; // 50MB for images
-      errorMessage = 'Only image files (JPG, PNG, GIF, WebP, BMP) are supported';
+        errorMessage = t('Only image files (JPG, PNG, GIF, WebP, BMP) are supported');
     } else {
       allowedTypes = ['.glb'];
       maxSize = 100 * 1024 * 1024; // 100MB for 3D models
-      errorMessage = 'Only .glb files are supported';
+        errorMessage = t('Only .glb files are supported');
     }
 
     if (file.size > maxSize) {
@@ -731,9 +733,9 @@ const CustomModelsTab = () => {
         <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg flex items-center gap-3">
           <AlertCircle className="w-4 h-4 text-yellow-400" />
           <div className="text-yellow-400 text-sm">
-            <div>Storage is {storageInfo.percentUsed}% full</div>
+            <div>{t("Storage is {{percent}}% full", { percent: storageInfo.percentUsed })}</div>
             <div className="text-xs text-yellow-400/70 mt-1">
-              Consider deleting unused models to free up space
+              {t("Consider deleting unused models to free up space")}
             </div>
           </div>
         </div>
@@ -754,14 +756,14 @@ const CustomModelsTab = () => {
             {activeUploadTab === 'images' ? (
               <>
                 <Upload className="w-16 h-16 mb-4" />
-                <p className="text-lg">No custom images uploaded yet</p>
-                <p className="text-sm">Upload your first image to get started</p>
+                <p className="text-lg">{t("No custom images uploaded yet")}</p>
+                <p className="text-sm">{t("Upload your first image to get started")}</p>
               </>
             ) : (
               <>
                 <FileText className="w-16 h-16 mb-4" />
-                <p className="text-lg">No custom models uploaded yet</p>
-                <p className="text-sm">Upload your first .glb model to get started</p>
+                <p className="text-lg">{t("No custom models uploaded yet")}</p>
+                <p className="text-sm">{t("Upload your first .glb model to get started")}</p>
               </>
             )}
           </div>
@@ -804,7 +806,7 @@ const CustomModelsTab = () => {
 
                   {/* Hover overlay */}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100 z-10">
-                    <div className="text-white text-sm font-medium">Select</div>
+                    <div className="text-white text-sm font-medium">{t("Select")}</div>
                   </div>
 
                   {/* Delete button */}

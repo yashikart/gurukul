@@ -611,6 +611,25 @@ button:hover {
   margin-bottom: 1.5rem !important;
   line-height: 1.4 !important;
 }
+
+/* ===== SUMMARY PARAGRAPH STYLING ===== */
+/* Beautiful paragraph styling for summaries */
+.summary-paragraph {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Smooth text rendering for summary content */
+.summary-content {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 /* ===== COMPREHENSIVE MOBILE RESPONSIVENESS IMPROVEMENTS ===== */
 
 /* Enhanced mobile responsive adjustments for wide-list */

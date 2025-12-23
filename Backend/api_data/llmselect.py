@@ -121,7 +121,7 @@ def call_llm(prompt: str, llm: str) -> str:
                 "Content-Type": "application/json"
             }
             payload = {
-                "model": "llama3-8b-8192",
+                "model": "llama-3.1-8b-instant",
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.7,
                 "max_tokens": 512,
@@ -145,7 +145,7 @@ def call_llm(prompt: str, llm: str) -> str:
                 "Content-Type": "application/json"
             }
             payload = {
-                "model": "llama3-70b-8192",  # Groq's LLaMA 3 model
+                "model": "llama-3.3-70b-versatile",  # Groq's LLaMA 3 model
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.7,
                 "max_tokens": 512,

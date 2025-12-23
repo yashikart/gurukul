@@ -13,12 +13,16 @@ import { CHAT_API_BASE_URL } from "../config";
 import { useChatHistory } from "../hooks/useChatHistory";
 import { useNavigationPersistence, useAuthPersistence } from "../hooks/useNavigationPersistence";
 import { selectIsSpeaking, setIsSpeaking } from "../store/avatarSlice";
+import { processChatbotMessage } from "../utils/karmaManager";
+import { selectUser } from "../store/authSlice";
+import MessageContent from "../components/MessageContent";
 
 export default function Chatbot() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const isSpeaking = useSelector(selectIsSpeaking);
+  const user = useSelector(selectUser);
 
   // Use the chat history hook with session management
   const {
@@ -297,22 +301,48 @@ export default function Chatbot() {
 
   // Direct API functions
   const sendChatMessage = async (userQuery, userId, llmModel = "grok") => {
+    // Debug: Log the actual CHAT_API_BASE_URL being used
+    console.log(`DEBUG - CHAT_API_BASE_URL from config:`, CHAT_API_BASE_URL);
     console.log(`DEBUG - Sending chat message to ${CHAT_API_BASE_URL}/chatpost`);
     console.log(`DEBUG - User ID: ${userId}, Model: ${llmModel}`);
     console.log(`DEBUG - Message: ${userQuery}`);
 
+    // Check network connectivity
+    if (!navigator.onLine) {
+      const error = new Error("No internet connection. Please check your network.");
+      console.error("DEBUG - Network offline:", error);
+      throw error;
+    }
+
     try {
+      // Add timeout controller
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+      // Determine language
+      const currentLanguage = i18n.language && i18n.language.toLowerCase().startsWith("ar") ? "arabic" : "english";
+      console.log("🌐 [Chatbot] Language detection:", {
+        i18nLanguage: i18n.language,
+        currentLanguage: currentLanguage,
+        isArabic: currentLanguage === "arabic"
+      });
+      
       const response = await fetch(`${CHAT_API_BASE_URL}/chatpost?user_id=${userId}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true", // Add ngrok header for POST too
         },
         body: JSON.stringify({
           message: userQuery,
           llm: llmModel,
+          language: currentLanguage,
           type: "chat_message",
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         console.error(`HTTP error! status: ${response.status}`);
@@ -324,26 +354,50 @@ export default function Chatbot() {
       return data;
     } catch (error) {
       console.error("DEBUG - Error sending chat message:", error);
+      
+      // Provide better error messages
+      if (error.name === "AbortError") {
+        throw new Error("Request timeout: The server took too long to respond. Please try again.");
+      } else if (error.message?.includes("Failed to fetch") || error.name === "TypeError") {
+        throw new Error("Network error: Unable to connect to the chatbot server. Please ensure the backend server is running and the ngrok tunnel is active.");
+      }
+      
       throw error;
     }
   };
 
-  const fetchChatbotResponse = async (userId) => {
+  const fetchChatbotResponse = async (userId, timeoutMs = 30000) => {
     console.log(`DEBUG - Fetching chatbot response from ${CHAT_API_BASE_URL}/chatbot`);
     console.log(`DEBUG - User ID: ${userId}`);
+    console.log(`DEBUG - Timeout: ${timeoutMs}ms`);
+
+    // Check network connectivity
+    if (!navigator.onLine) {
+      const error = new Error("No internet connection. Please check your network.");
+      console.error("DEBUG - Network offline:", error);
+      throw error;
+    }
 
     try {
+      // Add timeout controller
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
       // Add timestamp to prevent caching
       const timestamp = new Date().getTime();
       const response = await fetch(`${CHAT_API_BASE_URL}/chatbot?user_id=${userId}&timestamp=${timestamp}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
           "Cache-Control": "no-cache, no-store, must-revalidate",
           "Pragma": "no-cache",
           "Expires": "0"
         },
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         console.error(`HTTP error! status: ${response.status}`);
@@ -355,6 +409,14 @@ export default function Chatbot() {
       return data;
     } catch (error) {
       console.error("DEBUG - Error fetching chatbot response:", error);
+      
+      // Provide better error messages
+      if (error.name === "AbortError") {
+        throw new Error("Request timeout: The server took too long to respond. Please try again.");
+      } else if (error.message?.includes("Failed to fetch") || error.name === "TypeError") {
+        throw new Error("Network error: Unable to connect to the chatbot server. Please ensure the backend server is running and the ngrok tunnel is active.");
+      }
+      
       throw error;
     }
   };
@@ -440,8 +502,30 @@ export default function Chatbot() {
 
       try {
         // Make sure userId is always defined
-        const effectiveUserId = userId || "guest-user";
+        const effectiveUserId = userId || user?.id || "guest-user";
         console.log("DEBUG - Using effective user ID:", effectiveUserId);
+
+        // Process karma based on message content
+        const karmaResult = processChatbotMessage(effectiveUserId, userQuery);
+        if (karmaResult) {
+          // Dispatch custom event for karma widget to listen
+          window.dispatchEvent(new CustomEvent('karmaChanged', {
+            detail: karmaResult
+          }));
+          
+          // Show toast notification
+          if (karmaResult.change > 0) {
+            toast.success(`+${karmaResult.change} Karma: ${karmaResult.reason}`, {
+              position: "top-right",
+              duration: 3000,
+            });
+          } else {
+            toast.error(`${karmaResult.change} Karma: ${karmaResult.reason}`, {
+              position: "top-right",
+              duration: 3000,
+            });
+          }
+        }
 
         // STEP 1: First send the user's query to the chatpost endpoint
         console.log("DEBUG - Sending user query to chatpost");
@@ -452,7 +536,27 @@ export default function Chatbot() {
           console.log("DEBUG - Initial chatpost result:", chatpostResult);
         } catch (error) {
           console.error("DEBUG - Error sending chat message:", error);
-          // Continue anyway - the message might still be processed
+          
+          // Show user-friendly error message
+          const errorMessage = error.message || "Failed to send message to server";
+          toast.error(errorMessage, {
+            position: "bottom-right",
+            duration: 5000,
+          });
+          
+          // If it's a network error, don't continue - the backend isn't reachable
+          if (error.message?.includes("Network error") || error.message?.includes("Failed to fetch")) {
+            setIsLoading(false);
+            const errorMsg = {
+              role: "assistant",
+              content: `⚠️ Connection Error: ${errorMessage}\n\nPlease ensure:\n1. The backend server is running\n2. The ngrok tunnel is active\n3. Your internet connection is working`,
+              timestamp: new Date().toISOString(),
+            };
+            await addMessage(errorMsg);
+            return;
+          }
+          
+          // Continue anyway for other errors - the message might still be processed
         }
 
         // STEP 2: Now fetch the response from the chatbot endpoint
@@ -469,9 +573,13 @@ export default function Chatbot() {
         let retryDelay = 2000; // Start with 2 seconds
 
         // Keep trying until we get a response or reach max retries
+        // Use longer timeout for Arabic model (needs time to load model + generate)
+        const timeoutMs = selectedModel === "arabic" ? 120000 : 30000; // 120s for Arabic, 30s for others
+        console.log(`DEBUG - Using timeout: ${timeoutMs}ms for model: ${selectedModel}`);
+        
         while (retryCount < maxRetries) {
           try {
-            response = await fetchChatbotResponse(effectiveUserId);
+            response = await fetchChatbotResponse(effectiveUserId, timeoutMs);
             console.log("DEBUG - Got response:", response);
 
             // If we got a valid response with no "No queries yet" error, break out of the loop
@@ -488,6 +596,13 @@ export default function Chatbot() {
             retryDelay = Math.min(retryDelay * 1.5, 10000); // Cap at 10 seconds
           } catch (error) {
             console.error("DEBUG - Error fetching response:", error);
+            
+            // If it's a network error, don't retry - the backend isn't reachable
+            if (error.message?.includes("Network error") || error.message?.includes("Failed to fetch")) {
+              console.error("DEBUG - Network error detected, stopping retries");
+              throw error; // Re-throw to be caught by outer catch
+            }
+            
             retryCount++;
             await new Promise((resolve) => setTimeout(resolve, retryDelay));
             retryDelay = Math.min(retryDelay * 1.5, 10000);
@@ -526,14 +641,15 @@ export default function Chatbot() {
             // Fallback: response is a string
             aiMessage = response;
             console.log("DEBUG - Response is a string:", aiMessage);
-          } else if (response && response.error) {
-            // Handle other error cases
+          } else if (response && response.error && response.error !== "No queries yet") {
+            // Handle other error cases (but not "No queries yet" which is already handled)
             aiMessage = `I encountered an issue: ${response.error}. Please try again.`;
             console.log("DEBUG - Found error message:", response.error);
           } else {
             // Last resort fallback
             aiMessage = "I received your message but had trouble generating a response. Please try again.";
             console.log("DEBUG - Using fallback message");
+            console.log("DEBUG - Full response object:", JSON.stringify(response, null, 2));
           }
         }
 
@@ -636,7 +752,15 @@ export default function Chatbot() {
         let toastMessage =
           "Error connecting to chatbot server. Please try again.";
 
+        // Handle network errors specifically
         if (
+          errorMessage.includes("Network error") ||
+          errorMessage.includes("Failed to fetch") ||
+          errorMessage.includes("Unable to connect")
+        ) {
+          userErrorMessage = `⚠️ Connection Error: ${errorMessage}\n\nPlease ensure:\n1. The backend server is running\n2. The ngrok tunnel is active (if using ngrok)\n3. Your internet connection is working\n\nCheck the backend terminal for server status.`;
+          toastMessage = "Network error: Unable to connect to chatbot server. Please check backend server status.";
+        } else if (
           errorMessage.includes("503") ||
           errorMessage.includes("unavailable")
         ) {
@@ -774,14 +898,14 @@ export default function Chatbot() {
             >
               <Menu className="w-5 h-5 text-white" />
             </button>
-            <h1 className="mobile-title">{t("AI Guru Chat")}</h1>
+            <h1 className="mobile-title">{t("Chatbot")}</h1>
           </div>
           
           <div className="flex items-center gap-2">
             <button
               onClick={toggleTTSMute}
               className="mobile-icon-btn"
-              title={isTTSMuted ? "Unmute voice" : "Mute voice"}
+              title={isTTSMuted ? t("Unmute voice") : t("Mute voice")}
             >
               {isTTSMuted ? (
                 <VolumeX className="w-4 h-4 text-white/60" />
@@ -863,7 +987,9 @@ export default function Chatbot() {
                       className={`mobile-message ${isUser ? 'user' : isError ? 'error' : 'assistant'}`}
                     >
                       <div className="mobile-message-bubble">
-                        <p className="mobile-message-text">{message.content}</p>
+                        <p className="mobile-message-text">
+                          <MessageContent content={message.content} />
+                        </p>
                         
                         {!isUser && !isError && serviceHealthy && (
                           <button
@@ -907,8 +1033,8 @@ export default function Chatbot() {
                   >
                     <option value="grok">Grok</option>
                     <option value="llama">Llama</option>
-                    <option value="chatgpt">ChatGPT</option>
                     <option value="uniguru">UniGuru</option>
+                    <option value="arabic">Arabic Model</option>
                   </select>
                   
                   {/* Status indicators */}
@@ -916,14 +1042,14 @@ export default function Chatbot() {
                     {isGeneratingTTS && (
                       <div className="mobile-status-item">
                         <div className="w-2 h-2 rounded-full bg-white/60 animate-pulse" />
-                        <span>Generating...</span>
+                        <span>{t("Generating...")}</span>
                       </div>
                     )}
                     
                     {!isGeneratingTTS && isSpeaking && (
                       <div className="mobile-status-item">
                         <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                        <span>Speaking...</span>
+                        <span>{t("Speaking...")}</span>
                       </div>
                     )}
                   </div>
@@ -1023,7 +1149,7 @@ export default function Chatbot() {
             className="text-4xl md:text-5xl font-extrabold drop-shadow-lg transition-all duration-300 hover:bg-gradient-to-r hover:from-white hover:to-[#FF9933] hover:bg-clip-text hover:text-transparent"
             style={{ color: "#FFFFFF", fontFamily: "Nunito, sans-serif" }}
           >
-            {t("AI Guru Chat")}
+            {t("Chatbot")}
           </h2>
 
           {/* TTS Controls */}
@@ -1032,7 +1158,7 @@ export default function Chatbot() {
             {isGeneratingTTS && (
               <div className="flex items-center gap-1 text-xs text-white/60">
                 <div className="w-2 h-2 rounded-full bg-white/60 animate-pulse" />
-                <span className="hidden sm:inline">Generating...</span>
+                <span className="hidden sm:inline">{t("Generating...")}</span>
               </div>
             )}
 
@@ -1040,7 +1166,7 @@ export default function Chatbot() {
             {!isGeneratingTTS && isSpeaking && (
               <div className="flex items-center gap-1 text-xs text-green-400">
                 <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                <span className="hidden sm:inline">Speaking...</span>
+                <span className="hidden sm:inline">{t("Speaking...")}</span>
               </div>
             )}
 
@@ -1056,10 +1182,10 @@ export default function Chatbot() {
                   }
                 }}
                 className="px-3 py-1.5 rounded-lg bg-[#FF9933]/20 hover:bg-[#FF9933]/30 text-white transition-colors text-sm border border-[#FF9933]/30"
-                title="Speak all AI responses"
+                title={t("Speak all AI responses")}
                 disabled={isGeneratingTTS || isSpeaking}
               >
-                <span className="hidden sm:inline">Speak All</span>
+                <span className="hidden sm:inline">{t("Speak All")}</span>
                 <span className="sm:hidden">🔊</span>
               </button>
             )}
@@ -1068,7 +1194,7 @@ export default function Chatbot() {
             <button
               onClick={toggleTTSMute}
               className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-              title={isTTSMuted ? "Unmute voice" : "Mute voice"}
+              title={isTTSMuted ? t("Unmute voice") : t("Mute voice")}
             >
               {isTTSMuted ? (
                 <VolumeX className="w-5 h-5 text-white/60" />
@@ -1205,7 +1331,7 @@ export default function Chatbot() {
                     maxWidth: "100%",
                   }}
                 >
-                  {currentStreamingMessage}
+                  <MessageContent content={currentStreamingMessage} />
                 </p>
 
                 {/* Individual TTS Button for Streaming Message */}
@@ -1217,7 +1343,7 @@ export default function Chatbot() {
                         ? 'bg-green-500/20 text-green-400'
                         : 'bg-white/10 hover:bg-[#FF9933]/20 text-white/70 hover:text-[#FF9933]'
                     }`}
-                    title={playingMessageId === 'streaming' ? "Playing..." : "Play this message"}
+                    title={playingMessageId === 'streaming' ? t("Playing...") : t("Play this message")}
                     disabled={isTTSMuted}
                   >
                     {playingMessageId === 'streaming' ? (
@@ -1302,7 +1428,7 @@ export default function Chatbot() {
                     maxWidth: "100%",
                   }}
                 >
-                  {message.content}
+                  <MessageContent content={message.content} />
                 </p>
 
                 {/* Individual TTS Button for Assistant Messages */}
@@ -1314,7 +1440,7 @@ export default function Chatbot() {
                         ? 'bg-green-500/20 text-green-400'
                         : 'bg-white/10 hover:bg-[#FF9933]/20 text-white/70 hover:text-[#FF9933]'
                     }`}
-                    title={playingMessageId === (message.id || message.timestamp) ? "Playing..." : "Play this message"}
+                    title={playingMessageId === (message.id || message.timestamp) ? t("Playing...") : t("Play this message")}
                     disabled={isTTSMuted}
                   >
                     {playingMessageId === (message.id || message.timestamp) ? (
@@ -1421,11 +1547,11 @@ export default function Chatbot() {
               <option value="llama" className="bg-[#1E1E28] text-white">
                 Llama
               </option>
-              <option value="chatgpt" className="bg-[#1E1E28] text-white">
-                ChatGPT
-              </option>
               <option value="uniguru" className="bg-[#1E1E28] text-white">
                 UniGuru
+              </option>
+              <option value="arabic" className="bg-[#1E1E28] text-white">
+                Arabic Model
               </option>
             </select>
             {/* Custom dropdown arrow */}

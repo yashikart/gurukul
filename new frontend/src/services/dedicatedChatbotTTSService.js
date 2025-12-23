@@ -37,6 +37,10 @@ class DedicatedChatbotTTSService {
       }
       return false;
     } catch (error) {
+      // Silently handle blocked requests (ad blockers, etc.)
+      if (error.message && error.message.includes('ERR_BLOCKED_BY_CLIENT')) {
+        console.info('ℹ️ TTS health check blocked by browser extension');
+      }
       return false;
     }
   }

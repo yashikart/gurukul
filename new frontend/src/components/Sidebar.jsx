@@ -14,7 +14,6 @@ import {
   Cpu,
   FileDigit,
   UserCircle,
-  TrendingUp,
 } from "lucide-react";
 
 export default function Sidebar({ collapsed = false, onToggle }) {
@@ -35,7 +34,6 @@ export default function Sidebar({ collapsed = false, onToggle }) {
       { icon: FileTextIcon, label: "Test", href: "/test" },
       { icon: Video, label: "Lectures", href: "/lectures" },
       { icon: Cpu, label: "Agent Simulator", href: "/agent-simulator" },
-      { icon: TrendingUp, label: "Forecasting", href: "/forecasting-simple" },
       { icon: UserCircle, label: "Avatar", href: "/avatar-selection" },
     ],
     []

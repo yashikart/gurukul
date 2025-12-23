@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Play } from "lucide-react";
 
 /**
  * TerminalTypewriter - Creates terminal-style typewriter effect for text
@@ -57,7 +58,10 @@ export function TerminalMessage({
   message,
   isUser = false,
   isTyping = false,
-  onTypingComplete = null
+  onTypingComplete = null,
+  onPlayAudio = null,
+  isPlaying = false,
+  isTTSMuted = false
 }) {
   const [showMessage, setShowMessage] = useState(isUser);
 
@@ -87,7 +91,7 @@ export function TerminalMessage({
   }
 
   return (
-    <div className="flex items-start gap-2 mb-2">
+    <div className="flex items-start gap-2 mb-2 group">
       <span className="text-orange-500 font-mono text-xs">ॐ</span>
       <div className="text-white font-mono text-xs break-words flex-1">
         {isTyping ? (
@@ -101,6 +105,19 @@ export function TerminalMessage({
           message.content
         )}
       </div>
+      {!isTyping && onPlayAudio && !isTTSMuted && (
+        <button
+          onClick={() => onPlayAudio(message.content, message.id)}
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/10 rounded"
+          title="Play audio"
+        >
+          {isPlaying ? (
+            <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse" />
+          ) : (
+            <Play className="w-3 h-3 text-white/60 hover:text-white" />
+          )}
+        </button>
+      )}
     </div>
   );
 }

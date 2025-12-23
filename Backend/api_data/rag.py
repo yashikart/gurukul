@@ -19,8 +19,48 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from langchain_community.vectorstores import FAISS
-from langchain.chains import RetrievalQA
+from langchain_classic.chains.retrieval_qa.base import RetrievalQA
 from langchain_core.documents import Document
+from langchain_core.prompts import PromptTemplate
+try:
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+except ImportError:
+    # Fallback: simple text splitter if langchain_text_splitters is not available
+    class RecursiveCharacterTextSplitter:
+        def __init__(self, chunk_size=1000, chunk_overlap=200, length_function=len, separators=None):
+            self.chunk_size = chunk_size
+            self.chunk_overlap = chunk_overlap
+            self.length_function = length_function
+            self.separators = separators or ["\n\n", "\n", ". ", " ", ""]
+        
+        def split_text(self, text: str) -> List[str]:
+            """Simple text splitting implementation"""
+            if self.length_function(text) <= self.chunk_size:
+                return [text]
+            
+            chunks = []
+            start = 0
+            
+            while start < len(text):
+                end = start + self.chunk_size
+                if end >= len(text):
+                    chunks.append(text[start:])
+                    break
+                
+                # Try to split at a separator
+                best_split = end
+                for sep in self.separators:
+                    split_pos = text.rfind(sep, start, end)
+                    if split_pos > start:
+                        best_split = split_pos + len(sep)
+                        break
+                
+                chunks.append(text[start:best_split])
+                start = best_split - self.chunk_overlap
+                if start < 0:
+                    start = 0
+            
+            return chunks
 import pytesseract
 from PIL import Image
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -28,7 +68,7 @@ from gtts import gTTS
 from typing import List, Dict
 import shutil
 import logging
-from langchain.llms.base import LLM
+from langchain_core.language_models.llms import LLM
 from typing import Optional, List
 
 # Set up logging
@@ -65,7 +105,7 @@ image_response: ImageResponse| None = None
 
 class SimpleGroqLLM(LLM):
     groq_api_key: str
-    model: str = "llama3-8b-8192"
+    model: str = "llama-3.1-8b-instant"
 
     def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
         headers = {
@@ -78,16 +118,28 @@ class SimpleGroqLLM(LLM):
         }
 
         response = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload)
-        
+
         try:
             result = response.json()
-            if "choices" in result:
+
+            # Check for HTTP errors first
+            if response.status_code != 200:
+                error_msg = result.get("error", {}).get("message", "Unknown error")
+                logger.error(f"Groq API HTTP {response.status_code}: {error_msg}")
+                raise RuntimeError(f"Groq API error: {error_msg}")
+
+            # Check for successful response format
+            if "choices" in result and len(result["choices"]) > 0:
                 return result["choices"][0]["message"]["content"]
             else:
                 raise ValueError(f"Unexpected response format from Groq API: {result}")
+
+        except requests.exceptions.JSONDecodeError:
+            logger.error(f"Groq API returned invalid JSON: {response.text}")
+            raise RuntimeError("Failed to parse Groq API response.")
         except Exception as e:
             logger.error(f"Groq API call failed: {e}")
-            raise RuntimeError("Failed to generate response from Groq API.")
+            raise RuntimeError(f"Failed to generate response from Groq API: {str(e)}")
     
     @property
     def _llm_type(self) -> str:
@@ -142,16 +194,72 @@ def extract_text_easyocr(image_path: str) -> str:
 #        print(f"Error during OCR: {e}")
 #        raise e
 
-def build_qa_agent(texts: List[str], groq_api_key: str) -> RetrievalQA:
-    llm = SimpleGroqLLM(groq_api_key=groq_api_key, model="llama3-8b-8192")
-    documents = [Document(page_content=t) for t in texts if t.strip()]
+def build_qa_agent(texts: List[str], groq_api_key: str, chunk_size: int = 800, chunk_overlap: int = 150) -> RetrievalQA:
+    """
+    Build a QA agent with text chunking to handle large documents.
+    
+    Args:
+        texts: List of text strings to process
+        groq_api_key: Groq API key
+        chunk_size: Size of each text chunk (default 800 chars, ~200 tokens)
+        chunk_overlap: Overlap between chunks (default 150 chars)
+    """
+    llm = SimpleGroqLLM(groq_api_key=groq_api_key, model="llama-3.1-8b-instant")
+    
+    # Combine all texts
+    combined_text = "\n\n".join([t.strip() for t in texts if t.strip()])
+    
+    # Estimate token count (rough approximation: 1 token ≈ 4 characters)
+    estimated_tokens = len(combined_text) // 4
+    logger.info(f"PDF content length: {len(combined_text)} chars (~{estimated_tokens} tokens)")
+    
+    # Split text into chunks to avoid token limits
+    # Using smaller chunks (800 chars ≈ 200 tokens) to stay well under 6000 token limit
+    # With k=2 chunks retrieved, that's ~400 tokens of context + query + response
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        length_function=len,
+        separators=["\n\n", "\n", ". ", " ", ""]
+    )
+    
+    # Split the text into chunks
+    text_chunks = text_splitter.split_text(combined_text)
+    logger.info(f"Split text into {len(text_chunks)} chunks (chunk_size={chunk_size}, overlap={chunk_overlap})")
+    
+    # Create documents from chunks
+    documents = [Document(page_content=chunk) for chunk in text_chunks]
+    
+    # Create embeddings and vector store
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     db = FAISS.from_documents(documents, embeddings)
     
+    # Create custom prompt template that enforces paragraph formatting
+    prompt_template = """Use the following pieces of context to answer the question at the end. 
+
+CRITICAL FORMATTING REQUIREMENT: Write your answer ONLY in well-formed paragraphs. DO NOT use bullet points, numbered lists, dashes, asterisks, or any list formatting. Write in complete sentences that flow naturally into paragraphs. Each paragraph should be 3-5 sentences covering a complete thought. Use double line breaks between paragraphs.
+
+Context:
+{context}
+
+Question: {question}
+
+Answer (write in paragraphs only, no bullet points or lists):"""
+    
+    PROMPT = PromptTemplate(
+        template=prompt_template,
+        input_variables=["context", "question"]
+    )
+    
+    # Create QA agent with retriever that only gets relevant chunks
+    # Using k=2 to limit context size (2 chunks × 200 tokens = 400 tokens max)
     qa = RetrievalQA.from_chain_type(
         llm=llm,
-        retriever=db.as_retriever(),
-        return_source_documents=True
+        retriever=db.as_retriever(
+            search_kwargs={"k": 2}  # Only retrieve top 2 most relevant chunks to stay under token limit
+        ),
+        return_source_documents=True,
+        chain_type_kwargs={"prompt": PROMPT}  # Use custom prompt template
     )
     return qa
 

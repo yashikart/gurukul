@@ -1,0 +1,8 @@
+{
+  "test_context": {
+    "dharma_weight": 1.5,
+    "artha_weight": 1.2,
+    "kama_weight": 0.8,
+    "moksha_weight": 1.3
+  }
+}

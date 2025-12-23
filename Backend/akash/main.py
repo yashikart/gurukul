@@ -101,4 +101,6 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8004)
+    # Use port from environment variable or default to 8008 to avoid conflicts
+    port = int(os.getenv("AKASH_SERVICE_PORT", 8008))
+    uvicorn.run(app, host="0.0.0.0", port=port)

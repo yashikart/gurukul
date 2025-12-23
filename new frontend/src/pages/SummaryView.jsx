@@ -455,90 +455,31 @@ export default function SummaryView() {
     if (!text) return [];
 
     try {
-      // First check if the text contains numbered points (1., 2., etc.)
-      const paragraphs = text.split("\n\n");
+      // Split by double newlines to get paragraphs
+      const paragraphs = text.split("\n\n").filter((p) => p.trim());
 
-      // Check if we have a list of numbered points
-      const hasNumberedPoints = paragraphs.some((p) =>
-        p.trim().match(/^\d+\.\s/)
-      );
-
-      if (hasNumberedPoints) {
-        // Process as a list of sections with numbered points
-        const sections = [];
-        let currentSection = { title: "Summary", points: [] };
-
-        paragraphs.forEach((paragraph) => {
-          // If it's a numbered point
-          if (paragraph.trim().match(/^\d+\.\s/)) {
-            currentSection.points.push(paragraph.trim());
-          } else if (paragraph.trim()) {
-            // If we already have points and find a new paragraph, it's a new section
-            if (currentSection.points.length > 0) {
-              sections.push(currentSection);
-              currentSection = { title: paragraph.trim(), points: [] };
-            } else {
-              // Otherwise it's the title/intro of the current section
-              currentSection.title = paragraph.trim();
-            }
-          }
-        });
-
-        // Add the last section if it has points
-        if (currentSection.points.length > 0) {
-          sections.push(currentSection);
-        }
-
-        return sections;
-      } else {
-        // Process as regular paragraphs
-        // Extract bullet points (lines starting with *)
-        const bulletPoints = text
-          .split("\n")
-          .filter(
-            (line) => line.trim().startsWith("*") || line.trim().startsWith("-")
-          )
-          .map((line) =>
-            line
-              .trim()
-              .substring(line.trim().startsWith("*") ? 1 : 1)
-              .trim()
-          );
-
-        if (bulletPoints.length > 0) {
-          // If we found bullet points, return them as a single section
-          return [
-            {
-              title: "Key Points",
-              points: bulletPoints,
-            },
-          ];
-        } else {
-          // Otherwise split by paragraphs and create sections
-          const paragraphs = text.split("\n\n").filter((p) => p.trim());
-
-          if (paragraphs.length <= 1) {
-            // If there's only one paragraph, return it as a single section
-            return [
-              {
-                title: "Summary",
-                points: [paragraphs[0]],
-              },
-            ];
-          } else {
-            // First paragraph is intro, rest are points
-            return [
-              {
-                title: paragraphs[0],
-                points: paragraphs.slice(1),
-              },
-            ];
-          }
-        }
+      if (paragraphs.length === 0) {
+        return [{ title: "Summary", paragraphs: [text] }];
       }
+
+      // Group paragraphs into logical sections
+      // First paragraph is usually the overview/introduction
+      // Remaining paragraphs are grouped together
+      if (paragraphs.length === 1) {
+        return [{ 
+          title: "Summary", 
+          paragraphs: [paragraphs[0].trim().split('\n').join(' ')] 
+        }];
+      }
+
+      // Multiple paragraphs: first is intro, rest are grouped
+      return [{
+        title: "Summary",
+        paragraphs: paragraphs.map(p => p.trim().split('\n').join(' '))
+      }];
     } catch (error) {
       console.error("Error formatting summary:", error);
-      return [{ title: "Summary", points: [text] }];
+      return [{ title: "Summary", paragraphs: [text] }];
     }
   };
 
@@ -663,42 +604,32 @@ export default function SummaryView() {
             {phases.map((section, index) => (
               <div
                 key={index}
-                className="bg-black/20 p-6 rounded-xl border border-white/5"
+                className="bg-black/20 p-6 rounded-xl border border-white/5 hover:border-white/10 transition-all duration-300"
               >
-                {/* Section Header */}
-                <div className="flex items-center mb-4">
-                  <span className="bg-[#FF9933]/20 px-3 py-1 rounded-md text-sm font-bold text-white/90">
-                    Section {index + 1}
-                  </span>
-                  <h3 className="text-lg text-white/90 font-semibold ml-3">
-                    {section.title}
-                  </h3>
-                </div>
+                {/* Section Header - Only show if there are multiple sections or custom title */}
+                {phases.length > 1 && (
+                  <div className="flex items-center mb-6">
+                    <span className="bg-gradient-to-r from-[#FF9933]/20 to-[#FF9933]/10 px-4 py-1.5 rounded-lg text-sm font-bold text-white/90 border border-[#FF9933]/30">
+                      Section {index + 1}
+                    </span>
+                    {section.title !== "Summary" && (
+                      <h3 className="text-lg text-white/90 font-semibold ml-3">
+                        {section.title}
+                      </h3>
+                    )}
+                  </div>
+                )}
 
                 {/* Section Content */}
-                <div className="space-y-4 ml-4">
-                  {section.points.map((point, i) => (
+                <div className="space-y-6 summary-content">
+                  {(section.paragraphs || section.points || []).map((paragraph, i) => (
                     <div
                       key={i}
-                      className="flex items-start text-white/80 group"
+                      className="group"
                     >
-                      {point.match(/^\d+\.\s/) ? (
-                        // For numbered points, extract the number
-                        <>
-                          <span className="text-[#FF9933] mr-2 font-bold min-w-[24px]">
-                            {point.match(/^\d+\./)[0]}
-                          </span>
-                          <span>{point.replace(/^\d+\.\s/, "")}</span>
-                        </>
-                      ) : (
-                        // For regular points
-                        <>
-                          <span className="text-[#FF9933] mr-2 mt-1.5 transform group-hover:scale-125 transition-transform duration-200">
-                            •
-                          </span>
-                          <span>{point}</span>
-                        </>
-                      )}
+                      <p className="summary-paragraph text-white/95 leading-relaxed text-base md:text-lg font-normal text-justify bg-gradient-to-r from-white/5 via-white/3 to-transparent rounded-lg p-4 md:p-5 hover:bg-white/10 hover:shadow-lg hover:shadow-[#FF9933]/10 transition-all duration-300 border-l-2 border-[#FF9933]/30 hover:border-[#FF9933]/60 backdrop-blur-sm">
+                        {paragraph}
+                      </p>
                     </div>
                   ))}
                 </div>

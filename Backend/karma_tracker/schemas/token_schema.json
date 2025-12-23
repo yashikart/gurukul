@@ -1,0 +1,131 @@
+{
+  "tokens": {
+    "DharmaPoints": {
+      "description": "Points earned through learning and following dharmic principles",
+      "expiry_days": 365,
+      "stackable": true,
+      "daily_decay": 0.0
+    },
+    "SevaPoints": {
+      "description": "Points earned through service to others",
+      "expiry_days": 365,
+      "stackable": true,
+      "daily_decay": 0.0005
+    },
+    "PunyaTokens": {
+      "description": "Tokens earned through selfless service and extraordinary acts",
+      "expiry_days": 730,
+      "stackable": true,
+      "daily_decay": 0.0001
+    },
+    "PaapTokens": {
+      "description": "Negative tokens accumulated through harmful actions",
+      "severity_classes": {
+        "minor": {
+          "multiplier": 1.0,
+          "expiry_days": 180
+        },
+        "medium": {
+          "multiplier": 2.5,
+          "expiry_days": 365
+        },
+        "maha": {
+          "multiplier": 5.0,
+          "expiry_days": 730
+        }
+      },
+      "stackable": true,
+      "daily_decay": 0.0
+    },
+    "DridhaKarma": {
+      "description": "Weighted behavioral changeability - strong karma that is difficult to change",
+      "weight": 0.8,
+      "expiry_days": 1095,
+      "stackable": true,
+      "daily_decay": 0.00005
+    },
+    "AdridhaKarma": {
+      "description": "Weighted behavioral changeability - weak karma that is easier to change",
+      "weight": 0.3,
+      "expiry_days": 365,
+      "stackable": true,
+      "daily_decay": 0.001
+    },
+    "SanchitaKarma": {
+      "description": "Accumulated past karma from previous lives",
+      "weight": 1.0,
+      "expiry_days": null,
+      "stackable": true,
+      "daily_decay": 0.0
+    },
+    "PrarabdhaKarma": {
+      "description": "Current life karma being experienced",
+      "weight": 1.0,
+      "expiry_days": null,
+      "stackable": true,
+      "daily_decay": 0.0
+    },
+    "Rnanubandhan": {
+      "description": "Karmic debts and past obligations",
+      "weight": 0.9,
+      "severity_classes": {
+        "minor": {
+          "multiplier": 1.0,
+          "expiry_days": 365
+        },
+        "medium": {
+          "multiplier": 2.0,
+          "expiry_days": 730
+        },
+        "major": {
+          "multiplier": 4.0,
+          "expiry_days": 1460
+        }
+      },
+      "stackable": true,
+      "daily_decay": 0.0
+    }
+  },
+  "atonement_credits": {
+    "Jap": {
+      "description": "Repetition of mantras or prayers",
+      "units_required": {
+        "minor": 108,
+        "medium": 1008,
+        "maha": 10008
+      },
+      "expiry_days": 30,
+      "daily_decay": 0.0
+    },
+    "Tap": {
+      "description": "Austerities and self-discipline practices",
+      "units_required": {
+        "minor": 1,
+        "medium": 3,
+        "maha": 7
+      },
+      "expiry_days": 14,
+      "daily_decay": 0.0
+    },
+    "Bhakti": {
+      "description": "Devotional practices and service",
+      "units_required": {
+        "minor": 1,
+        "medium": 3,
+        "maha": 7
+      },
+      "expiry_days": 21,
+      "daily_decay": 0.0
+    },
+    "Daan": {
+      "description": "Charitable giving and donations",
+      "units_required": {
+        "minor": 10,
+        "medium": 50,
+        "maha": 100
+      },
+      "expiry_days": 90,
+      "daily_decay": 0.0
+    }
+  }
+}

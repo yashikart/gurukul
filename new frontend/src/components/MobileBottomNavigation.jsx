@@ -12,7 +12,6 @@ import {
   Cpu,
   FileDigit,
   UserCircle,
-  TrendingUp,
 } from "lucide-react";
 import MediaViewer from "./MediaViewer";
 import {
@@ -50,7 +49,6 @@ export default function MobileBottomNavigation() {
     { icon: FileTextIcon, label: "Test", href: "/test" },
     { icon: Video, label: "Lectures", href: "/lectures" },
     { icon: Cpu, label: "Agent Simulator", href: "/agent-simulator" },
-    { icon: TrendingUp, label: "Forecasting", href: "/forecasting-simple" },
     { icon: UserCircle, label: "Avatar", href: "/avatar-selection" },
     { icon: Settings, label: "Settings", href: "/settings" },
   ];

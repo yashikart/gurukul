@@ -1,0 +1,26 @@
+{
+  "timestamp": "2025-11-25T15:04:11.313281",
+  "services": {
+    "Backend Main": {
+      "status": "\u2705 HEALTHY",
+      "url": "http://localhost:8002",
+      "response_time": 2.05716
+    },
+    "Chatbot Service": {
+      "status": "\u2705 HEALTHY",
+      "url": "http://localhost:8001",
+      "response_time": 4.732949
+    },
+    "Frontend": {
+      "status": "\u2705 HEALTHY",
+      "url": "http://localhost:5173",
+      "response_time": 0.007217
+    },
+    "TTS Service": {
+      "status": "\u274c NOT RUNNING",
+      "url": "http://localhost:8007",
+      "error": "Connection refused"
+    }
+  },
+  "overall_status": "\u26a0\ufe0f PARTIAL (3/4 healthy)"
+}

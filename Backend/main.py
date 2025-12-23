@@ -25,6 +25,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Import centralized CORS helper
+from common.cors import configure_cors
+
 # Create main FastAPI app
 app = FastAPI(
     title="Gurukul Learning Platform API",
@@ -34,16 +37,23 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS middleware (tightened for production via env)
-allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "").strip()
-allowed_origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()] or ["http://localhost", "http://localhost:3000"]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Configure CORS using centralized helper
+configure_cors(app)
+
+# Generic OPTIONS handler for preflight requests
+from fastapi import Response
+
+@app.options("/{path:path}")
+async def preflight(path: str):
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": os.getenv("NGROK_URL", "*"),
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+            "Access-Control-Allow-Headers": "*"
+        }
+    )
 
 @app.get("/")
 async def root():
@@ -121,7 +131,8 @@ except Exception as e:
     logger.error(f"❌ Failed to mount TTS Service: {e}")
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
+    # Use port 8000 for main backend (not 8002)
+    port = int(os.getenv("BASE_BACKEND_PORT", 8000))
     host = os.getenv("HOST", "0.0.0.0")
     
     logger.info(f"🚀 Starting Gurukul Backend on {host}:{port}")

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 
 import MediaViewer from "./MediaViewer";
@@ -36,6 +37,7 @@ import { selectIsAuthenticated } from "../store/authSlice";
  * Only visible when pin mode is enabled and user is authenticated
  */
 export default function GlobalPinnedAvatar() {
+  const { t } = useTranslation();
   const dispatch = useDispatch();
   const location = useLocation();
 
@@ -405,8 +407,8 @@ export default function GlobalPinnedAvatar() {
       onDoubleClick={handleDoubleClick}
       title={
         shouldShowContainedAvatar
-          ? "Avatar contained in Pin Mode"
-          : "Drag to move • Double-click to chat"
+          ? t("Avatar contained in Pin Mode")
+          : t("Drag to move • Double-click to chat")
       }
     >
       {/* Godlike glow effect behind the avatar */}

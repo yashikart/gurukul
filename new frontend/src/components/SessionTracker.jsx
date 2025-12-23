@@ -1,12 +1,25 @@
 import React, { useEffect, useRef, useCallback } from "react";
 import { timeSync } from "../utils/timeSync";
-import { useUser } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext";
+
+// Fallback for crypto.randomUUID in non-secure contexts
+const generateUUID = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 const SessionTracker = ({ onTimeUpdate }) => {
-  const sessionIdRef = useRef(crypto.randomUUID());
+  const sessionIdRef = useRef(generateUUID());
   const startTimeRef = useRef(Date.now());
   const userIdRef = useRef(null);
-  const { isSignedIn, user } = useUser();
+  const { user } = useAuth();
+  const isSignedIn = !!user;
   const lastRecordedTimeRef = useRef(null);
   const lastUpdateTimeRef = useRef(Date.now());
 
@@ -22,7 +35,7 @@ const SessionTracker = ({ onTimeUpdate }) => {
     if (timeSpent < 1 || timeSpent === lastRecordedTimeRef.current) return;
 
     try {
-      // TODO: Replace with your backend API to record time with Clerk user ID
+      // TODO: Replace with your backend API to record time with user ID
       // await api.recordTime({ userId: userIdRef.current, sessionId: sessionIdRef.current, timeSpent, endReason });
       lastRecordedTimeRef.current = timeSpent;
       lastUpdateTimeRef.current = now;

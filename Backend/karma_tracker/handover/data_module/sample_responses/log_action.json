@@ -1,0 +1,16 @@
+{
+  "user_id": "usr_67890fghij",
+  "action": "lie",
+  "current_role": "citizen",
+  "predicted_next_role": "citizen",
+  "merit_score": 65,
+  "reward_token": "PaapTokens",
+  "reward_tier": "low",
+  "paap_generated": true,
+  "paap_severity": "minor",
+  "paap_value": 3,
+  "appeal_created": false,
+  "action_flow": "action -> intent -> merit -> reward_tier -> redemption",
+  "note": "User told a white lie to avoid conflict",
+  "timestamp": "2023-10-15T14:32:45Z"
+}

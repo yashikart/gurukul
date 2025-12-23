@@ -17,6 +17,8 @@ export const API_BASE_URL = getEnvVar(
 );
 
 // Chat API Base URL
+// For local development, use localhost if ngrok is not available
+// Set VITE_CHAT_API_BASE_URL in .env.local to override
 export const CHAT_API_BASE_URL = getEnvVar(
   'VITE_CHAT_API_BASE_URL',
   isDevelopment ? 'http://localhost:8001' : 'https://api.gurukul.com'
@@ -34,10 +36,16 @@ export const AGENT_API_BASE_URL = getEnvVar(
   isDevelopment ? 'http://localhost:8005' : 'https://api.gurukul.com'
 );
 
+// Wellness API Base URL
+export const WELLNESS_API_BASE_URL = getEnvVar(
+  'VITE_WELLNESS_API_BASE_URL',
+  isDevelopment ? 'http://localhost:8006' : 'https://api.gurukul.com'
+);
+
 // UniGuru API Base URL
 export const UNIGURU_API_BASE_URL = getEnvVar(
   'VITE_UNIGURU_API_BASE_URL',
-  isDevelopment ? 'https://e7d45d4c3f30.ngrok-free.app' : 'https://api.gurukul.com'
+  isDevelopment ? 'http://localhost:8000' : 'https://api.gurukul.com'
 );
 
 // Feature flags

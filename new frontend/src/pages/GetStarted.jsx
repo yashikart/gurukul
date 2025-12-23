@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { Power3, Power4, Back, Elastic } from "gsap";
@@ -15,6 +16,7 @@ import GlassButton from "../components/GlassButton";
 gsap.registerPlugin(ScrollTrigger);
 
 export default function GetStarted() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   // Refs for GSAP animations
@@ -394,7 +396,7 @@ export default function GetStarted() {
               onClick={handleGetStarted}
               className="hover-effect"
             >
-              Get Started
+              {t("Get Started")}
             </GlassButton>
           </div>
         </header>
@@ -423,7 +425,7 @@ export default function GetStarted() {
                 textShadow: "0 2px 4px rgba(0,0,0,0.3)",
               }}
             >
-              Welcome to Gurukul
+              {t("Welcome to Gurukul")}
             </h1>
 
             <h2
@@ -437,7 +439,7 @@ export default function GetStarted() {
                 marginBottom: "1.5rem",
               }}
             >
-              Where Ancient Wisdom Meets Modern Technology
+              {t("Where Ancient Wisdom Meets Modern Technology")}
             </h2>
 
             <p
@@ -449,9 +451,7 @@ export default function GetStarted() {
                 margin: "0 auto",
               }}
             >
-              Enhance your learning experience with AI-powered tools,
-              personalized study plans, and interactive content designed to help
-              you excel in your academic journey.
+              {t("Enhance your learning experience with AI-powered tools, personalized study plans, and interactive content designed to help you excel in your academic journey.")}
             </p>
           </div>
 
@@ -522,10 +522,10 @@ export default function GetStarted() {
                   marginBottom: "0.5rem",
                 }}
               >
-                Interactive Subjects
+                {t("Interactive Subjects")}
               </h3>
               <p style={{ color: "rgba(255, 255, 255, 0.8)" }}>
-                Explore subjects with interactive lessons and 3D visualizations.
+                {t("Explore subjects with interactive lessons and 3D visualizations.")}
               </p>
             </div>
 
@@ -586,10 +586,10 @@ export default function GetStarted() {
                   marginBottom: "0.5rem",
                 }}
               >
-                AI Guru Assistant
+                {t("AI Guru Assistant")}
               </h3>
               <p style={{ color: "rgba(255, 255, 255, 0.8)" }}>
-                Chat with our AI tutor for personalized guidance and support.
+                {t("Chat with our AI tutor for personalized guidance and support.")}
               </p>
             </div>
 
@@ -650,10 +650,10 @@ export default function GetStarted() {
                   marginBottom: "0.5rem",
                 }}
               >
-                Smart Learning Tools
+                {t("Smart Learning Tools")}
               </h3>
               <p style={{ color: "rgba(255, 255, 255, 0.8)" }}>
-                Analyze documents and generate insights to enhance learning.
+                {t("Analyze documents and generate insights to enhance learning.")}
               </p>
             </div>
           </div>

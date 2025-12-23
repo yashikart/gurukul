@@ -3,7 +3,7 @@ lectures_data = [
     "userid": "1",
     "subject_id": "1",
     "title": "Introduction to English",
-    "image": "https://superblog.supercdn.cloud/site_cuid_ckucmy84h97811nplkx3qfbgx/images/360f2268659604icxo3nduxkus3qgyb0jm5g26nrz36dy-1706005957048-compressed.jpg",
+    "image": "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=800&h=600&fit=crop",
     "link_to_lec":"https://www.youtube.com/results?search_query=english",
     "description": "Study of English language fundamentals including grammar, vocabulary, and comprehension."
   },

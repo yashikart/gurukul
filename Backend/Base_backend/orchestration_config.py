@@ -24,7 +24,9 @@ class OrchestrationConfig:
         self.ORCHESTRATION_FALLBACK_ENABLED = os.getenv("ORCHESTRATION_FALLBACK_ENABLED", "true").lower() == "true"
         
         # API Keys for Orchestration
-        self.GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+        # Default Google AI Studio API key
+        default_gemini_key = "AIzaSyDSunIIg6InYPa4yaYhrXKGXO2HTWhi_wc"
+        self.GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", default_gemini_key)
         self.GEMINI_API_KEY_BACKUP = os.getenv("GEMINI_API_KEY_BACKUP", "")
         
         # Sub-agent URLs (pointing to existing services)

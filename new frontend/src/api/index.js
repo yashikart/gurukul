@@ -86,7 +86,7 @@ export const sendChatMessage = async (
     );
 
     const response = await fetch(
-      `${API_BASE_URL}/chatpost?${params.toString()}`,
+      `${CHAT_API_BASE_URL}/chatpost?${params.toString()}`,
       {
         method: "POST",
         headers: {
@@ -395,7 +395,7 @@ export const fetchChatbotResponse = async (message, userId = null) => {
       error.message === "Failed to fetch"
     ) {
       throw new Error(
-        `Unable to connect to the server at ${API_BASE_URL}/chatbot - please check if the server is running or your network connection.`
+        `Unable to connect to the server at ${CHAT_API_BASE_URL}/chatbot - please check if the server is running or your network connection.`
       );
     }
     throw error;

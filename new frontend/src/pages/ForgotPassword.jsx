@@ -1,55 +1,53 @@
 import React, { useState } from "react";
-import { Mail, Key } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { Mail, RotateCcw } from "lucide-react";
 import GlassInput from "../components/GlassInput";
 import GlassButton from "../components/GlassButton";
-import { useClerk } from "@clerk/clerk-react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../supabaseClient";
 
 export default function ForgotPassword() {
-  const [emailSent, setEmailSent] = useState(false);
+  const [email, setEmail] = useState("");
   const [error, setError] = useState("");
-  const { client } = useClerk();
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
-  const handleReset = async (e) => {
+  const handleResetPassword = async (e) => {
     e.preventDefault();
     setError("");
-    setEmailSent(false);
-    const email = e.target.email.value;
+    setSuccess("");
+    setLoading(true);
 
     if (!email) {
-      setError("Please enter your email.");
-      toast.error("Please enter your email.", {
-        position: "bottom-right",
-        icon: "📧",
+      setError("Please enter your email address.");
+      toast.error("Please enter your email address.", {
+        position: "top-right",
       });
+      setLoading(false);
       return;
     }
 
-    // Show loading toast
-    const loadingToast = toast.loading("Sending reset instructions...", {
-      position: "bottom-right",
-    });
-
     try {
-      await client.sendPasswordResetEmail({ emailAddress: email });
-
-      // Dismiss loading toast
-      toast.dismiss(loadingToast);
-
-      setEmailSent(true);
-      toast.success("Reset instructions sent! Check your email inbox.", {
-        position: "bottom-right",
-        icon: "✉️",
-        duration: 5000,
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + "/update-password",
       });
+
+      if (error) throw error;
+
+      setSuccess("Password reset instructions sent! Please check your email.");
+      toast.success("Password reset instructions sent! Please check your email.", {
+        position: "top-right",
+      });
+
+      // Clear form
+      setEmail("");
     } catch (err) {
-      // Dismiss loading toast
-      toast.dismiss(loadingToast);
-
-      setError("An unexpected error occurred. Please try again.");
-      toast.error("An unexpected error occurred. Please try again.", {
-        position: "bottom-right",
-      });
+      const msg = err.message || "Failed to send password reset instructions";
+      setError(msg);
+      toast.error(msg, { position: "top-right" });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -73,70 +71,61 @@ export default function ForgotPassword() {
           className="text-3xl font-bold mb-6"
           style={{
             color: "#FFD700",
-            fontFamily: "Nunito, sans-serif",
+            fontFamily: "Tiro Devanagari Hindi, serif",
             textShadow: "0 2px 4px rgba(0,0,0,0.15)",
           }}
         >
-          Forgot Password
+          Reset Password
         </h1>
+
+        <p className="text-white mb-6 text-center">
+          Enter your email address and we'll send you instructions to reset your password.
+        </p>
+
         <form
           className="flex flex-col gap-3 w-full items-center"
-          onSubmit={handleReset}
+          onSubmit={handleResetPassword}
         >
           <GlassInput
             name="email"
             type="email"
-            placeholder="Enter your email"
+            placeholder="Email"
             icon={Mail}
-            autoComplete="username"
+            autoComplete="email"
             required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
           />
           <GlassButton
             type="submit"
-            icon={Key}
+            icon={RotateCcw}
             className="w-full mt-2"
             variant="primary"
+            disabled={loading}
           >
-            Send Reset Link
+            {loading ? "Sending..." : "Send Reset Instructions"}
           </GlassButton>
         </form>
-        {emailSent && (
-          <div className="text-green-300 text-sm mt-4 font-semibold">
-            Check your email for a reset link!
+
+        {error && (
+          <div className="text-red-300 text-sm mt-4 font-semibold text-center">
+            {error}
           </div>
         )}
-        {error && (
-          <div className="text-red-300 text-sm mt-4 font-semibold">{error}</div>
+        {success && (
+          <div className="text-green-300 text-sm mt-4 font-semibold text-center">
+            {success}
+          </div>
         )}
 
-        <div className="mt-7 flex flex-col gap-3 items-center text-sm">
+        <div className="mt-6 flex flex-col gap-3 items-center text-sm">
           <div className="w-full border-t border-white/20 my-2"></div>
-          {/* Back to Sign In link */}
-          <div>
-            {(() => {
-              try {
-                // eslint-disable-next-line
-                const { Link } = require("react-router-dom");
-                return (
-                  <Link
-                    to="/SignIn"
-                    className="text-white hover:text-[#FFD700] transition-colors font-medium"
-                  >
-                    Back to Sign In
-                  </Link>
-                );
-              } catch {
-                return (
-                  <a
-                    href="/SignIn"
-                    className="text-white hover:text-[#FFD700] transition-colors font-medium"
-                  >
-                    Back to Sign In
-                  </a>
-                );
-              }
-            })()}
-          </div>
+          <button
+            onClick={() => navigate("/signin")}
+            className="text-white hover:text-[#FFD700] transition-colors font-medium"
+          >
+            Back to Sign In
+          </button>
         </div>
       </section>
     </main>

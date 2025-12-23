@@ -1,22 +1,44 @@
 import os, sys
-# Ensure this directory is on sys.path so same-folder imports work when running as a package
-sys.path.append(os.path.dirname(__file__))
+import io
+
+# Fix Windows console encoding for Unicode characters
+if sys.platform == 'win32':
+    try:
+        # Set UTF-8 encoding for stdout/stderr
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    except (AttributeError, OSError):
+        # Fallback if buffer doesn't exist or can't be wrapped
+        pass
+
+# Ensure this directory and parent are on sys.path so same-folder imports work when running as a package
+current_dir = os.path.dirname(__file__)
+sys.path.append(current_dir)
+sys.path.append(os.path.dirname(current_dir))
 
 from rag import *
 from dotenv import load_dotenv
 import uvicorn
 import requests
-import os
 from llm_service import llm_service
 from datetime import datetime
 from subject_data import subjects_data
 from lectures_data import lectures_data
+# Arabic translation (checkpoint + LLM fallback)
+try:
+    from api_data.arabic_translator import translate_to_arabic, translate_to_arabic_with_checkpoint
+    ARABIC_TRANSLATOR_AVAILABLE = True
+except Exception:
+    ARABIC_TRANSLATOR_AVAILABLE = False
 # Test data for fallback when database is empty
 test_data = [
     {
         "id": 1,
         "title": "Sample Test",
         "subject": "Mathematics",
+        "test_link": "https://example.com/sample-test",
+        "image": "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=400&h=400&fit=crop",
+        "description": "A sample test to help you practice and evaluate your knowledge in Mathematics.",
         "questions": [
             {
                 "question": "What is 2 + 2?",
@@ -31,7 +53,8 @@ from datetime import datetime, timezone
 from typing import Optional
 import json
 import httpx
-from fastapi import HTTPException, Request, UploadFile, File, Form
+import base64
+from fastapi import HTTPException, Request, UploadFile, File, Form, Query
 from fastapi.responses import Response, FileResponse, StreamingResponse
 import shutil
 import uuid
@@ -57,19 +80,19 @@ try:
     if config.is_orchestration_available():
         from orchestration_api import UnifiedOrchestrationEngine, OrchestrationTriggers, AgentMemoryManager
         ORCHESTRATION_AVAILABLE = True
-        print("✅ Orchestration system imported successfully")
+        print("[OK] Orchestration system imported successfully")
 
         # Validate integration setup
         integration_status = validate_integration_setup()
-        print(f"🔧 Integration validation: {integration_status}")
+        print(f"[INFO] Integration validation: {integration_status}")
     else:
         ORCHESTRATION_AVAILABLE = False
-        print("⚠️ Orchestration system disabled in configuration")
+        print("[WARN] Orchestration system disabled in configuration")
 except ImportError as e:
     import logging
     from utils.logging_config import configure_logging
     logger = configure_logging("base_backend")
-    print(f"⚠️ Orchestration system not available: {e}")
+    print(f"[WARN] Orchestration system not available: {e}")
     ORCHESTRATION_AVAILABLE = False
 
 # Load environment variables from centralized configuration
@@ -82,35 +105,16 @@ load_shared_config("Base_backend")
 
 # Verify critical environment variables are loaded
 if not os.getenv("GROQ_API_KEY"):
-    print("⚠️  WARNING: GROQ_API_KEY not found in environment variables")
+    print("[WARN] GROQ_API_KEY not found in environment variables")
 if not os.getenv("MONGO_URI") and not os.getenv("MONGODB_URI"):
-    print("⚠️  WARNING: MONGO_URI/MONGODB_URI not found in environment variables")
+    print("[WARN] MONGO_URI/MONGODB_URI not found in environment variables")
 app = FastAPI()
 
-from fastapi.middleware.cors import CORSMiddleware
+# Import centralized CORS configuration
+from common.cors import configure_cors
 
-# CORS configuration via ALLOWED_ORIGINS
-# To allow all origins, set ALLOWED_ORIGINS="*" in your environment.
-_allowed = os.getenv("ALLOWED_ORIGINS", "").strip()
-if _allowed == "*":
-    _allow_all_origins = True
-    _allowed_list = ["*"]
-else:
-    _allow_all_origins = False
-    _allowed_list = [o.strip() for o in _allowed.split(",") if o.strip()] or [
-        "http://localhost",
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:5174",
-    ]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_allowed_list,
-    # Credentials cannot be used with wildcard "*" origin. Disable when allowing all origins.
-    allow_credentials=False if _allow_all_origins else True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Configure CORS using centralized helper
+configure_cors(app)
 
 # Initialize orchestration engine if available
 orchestration_engine = None
@@ -135,6 +139,11 @@ async def startup_event():
         except Exception as e:
             print(f"❌ Failed to initialize orchestration engine: {e}")
             orchestration_engine = None
+
+# Generic OPTIONS handler for all paths
+@app.options("/{path:path}")
+async def options_handler(path: str):
+    return Response(status_code=200)
 
 # Add a health check endpoint
 @app.get("/health")
@@ -255,10 +264,62 @@ class Test(BaseModel):
     subject_id: int
     date: Optional[str] = None
 
+def _translate_tests_if_needed(tests, language: str):
+    """Translate test metadata and questions to Arabic if requested."""
+    if not language or str(language).lower() != "arabic":
+        return tests
+    translated = []
+    for test in tests:
+        t_copy = dict(test)
+        fields_to_translate = []
+        if t_copy.get("title"):
+            fields_to_translate.append(("title", t_copy["title"]))
+        if t_copy.get("description"):
+            fields_to_translate.append(("description", t_copy["description"]))
+        # Translate question text and options
+        if t_copy.get("questions"):
+            new_questions = []
+            for q in t_copy["questions"]:
+                q_copy = dict(q)
+                if q_copy.get("question"):
+                    fields_to_translate.append(("question", q_copy["question"], q_copy))
+                if q_copy.get("options"):
+                    new_opts = []
+                    for opt in q_copy["options"]:
+                        fields_to_translate.append(("opt", opt, new_opts))
+                    q_copy["options"] = new_opts
+                new_questions.append(q_copy)
+            t_copy["questions"] = new_questions
+
+        # Run translation once per field to minimize calls
+        for item in fields_to_translate:
+            try:
+                if len(item) == 2:
+                    key, val = item
+                    translated_val = translate_to_arabic(val, fallback_llm_func=None) if ARABIC_TRANSLATOR_AVAILABLE else val
+                    t_copy[key] = translated_val
+                elif len(item) == 3:
+                    kind, val, target = item
+                    translated_val = translate_to_arabic(val, fallback_llm_func=None) if ARABIC_TRANSLATOR_AVAILABLE else val
+                    if kind == "question":
+                        target["question"] = translated_val
+                    elif kind == "opt":
+                        target.append(translated_val)
+            except Exception as e:
+                print(f"[tests] Translation failed for field {item}: {e}")
+                # Leave original value
+        translated.append(t_copy)
+    return translated
+
+
 # Real tests endpoint using MongoDB
 @app.get("/tests")
-def get_tests_real():
+def get_tests_real(language: str = Query("english", description="Language for tests (english, arabic)")):
     try:
+        lang_norm = str(language).lower().strip()
+        if lang_norm.startswith("ar"):
+            lang_norm = "arabic"
+
         # Try to get tests from MongoDB first
         tests = list(tests_collection.find({}, {"_id": 0}))
 
@@ -268,11 +329,13 @@ def get_tests_real():
             tests_collection.insert_many(test_data)
             tests = test_data
 
-        return JSONResponse(content=tests)
+        tests_translated = _translate_tests_if_needed(tests, lang_norm)
+        return JSONResponse(content=tests_translated)
     except Exception as e:
         print(f"Error fetching tests: {e}")
         # Fallback to dummy data if database fails
-        return JSONResponse(content=test_data)
+        fallback_tests = _translate_tests_if_needed(test_data, language)
+        return JSONResponse(content=fallback_tests)
 
 # ==== Lesson Generation API Models and Routes ====
 class LessonRequest(BaseModel):
@@ -296,11 +359,12 @@ async def generate_lesson(
     subject: str,
     topic: str,
     include_wikipedia: bool = True,
-    use_knowledge_store: bool = True
+    use_knowledge_store: bool = True,
+    language: str = "english"
 ):
     """Generate a lesson using GET parameters with proper knowledge base integration"""
     try:
-        print(f"🔍 Generating lesson for {subject}/{topic} with include_wikipedia={include_wikipedia}, use_knowledge_store={use_knowledge_store}")
+        print(f"🔍 Generating lesson for {subject}/{topic} with include_wikipedia={include_wikipedia}, use_knowledge_store={use_knowledge_store}, language={language}")
 
         # Initialize variables for content sources
         knowledge_content = ""
@@ -315,7 +379,11 @@ async def generate_lesson(
                 print("📚 Calling orchestration system for knowledge base content...")
 
                 # Construct query for the orchestration system
-                query = f"Explain {topic} in {subject}"
+                # Add language instruction to query if Arabic is selected
+                if language.lower() == "arabic":
+                    query = f"Explain {topic} in {subject}. Generate the response entirely in Arabic (العربية)."
+                else:
+                    query = f"Explain {topic} in {subject}"
 
                 # Call the orchestration system's edumentor endpoint
                 orchestration_url = "http://localhost:8006/edumentor"
@@ -396,113 +464,196 @@ async def generate_lesson(
                 print(f"⚠️ Wikipedia search failed: {wiki_error}")
                 wikipedia_content = ""
 
-                # If we found knowledge base content or Wikipedia content, use it
-                if knowledge_content or wikipedia_content:
-                    print("📖 Generating lesson with enhanced content...")
+        # If we found knowledge base content or Wikipedia content, use it
+        if knowledge_content or wikipedia_content:
+            print("📖 Generating lesson with enhanced content...")
 
-                    # Combine all available content
-                    reference_content = ""
-                    if wikipedia_content:
-                        reference_content += f"WIKIPEDIA CONTENT:\n{wikipedia_content}\n\n"
-                    if knowledge_content:
-                        reference_content += f"KNOWLEDGE BASE CONTENT:\n{knowledge_content}\n\n"
+            # Combine all available content
+            reference_content = ""
+            if wikipedia_content:
+                reference_content += f"WIKIPEDIA CONTENT:\n{wikipedia_content}\n\n"
+            if knowledge_content:
+                reference_content += f"KNOWLEDGE BASE CONTENT:\n{knowledge_content}\n\n"
 
-                    # Create enhanced prompt with all available content
-                    prompt = f"""
-                    Create a comprehensive lesson on the topic "{topic}" in the subject "{subject}" using the following reference content:
+            # Create enhanced prompt with all available content
+            # Add language instruction if Arabic is selected
+            language_instruction = ""
+            if language.lower() == "arabic":
+                language_instruction = "\n\nLANGUAGE REQUIREMENT: Generate the ENTIRE lesson in Arabic (العربية). All content including title, text, and quiz questions must be in Arabic. Use proper Arabic script and formatting."
+            
+            prompt = f"""
+            Create a concise but complete lesson on the topic "{topic}" in the subject "{subject}" using the following reference content:
 
-                    {reference_content}
+            {reference_content}
 
-                    Please create a structured lesson that includes:
-                    1. Title: A clear, engaging title for the lesson
-                    2. Level: Appropriate educational level (beginner, intermediate, advanced)
-                    3. Text: Comprehensive explanation incorporating the reference content above
-                    4. Quiz: An array of 3-5 multiple choice questions to test understanding
-                    5. TTS: Boolean flag (set to true for text-to-speech capability)
+            IMPORTANT CONSTRAINTS:
+            - The "text" field must be concise and complete within approximately 1000 characters
+            - Prioritize completeness and clarity over length
+            - Ensure the lesson feels complete and doesn't end abruptly
+            - Cover the essential concepts clearly and concisely
+            - Make every word count - be precise and informative
+            {language_instruction}
 
-                    Format the response as a JSON object with these exact fields:
+            Please create a structured lesson that includes:
+            1. Title: A clear, engaging title for the lesson
+            2. Level: Appropriate educational level (beginner, intermediate, advanced)
+            3. Text: Concise but complete explanation (approximately 800-1000 characters) incorporating the reference content above. Ensure it covers: introduction, key concepts, brief examples, and a conclusion. The text must feel complete and not truncated.
+            4. Quiz: An array of 3-5 multiple choice questions to test understanding
+            5. TTS: Boolean flag (set to true for text-to-speech capability)
+
+            Format the response as a JSON object with these exact fields:
+            {{
+                "title": "lesson title",
+                "level": "educational level",
+                "text": "concise but complete lesson content (approximately 800-1000 characters, must feel complete)",
+                "quiz": [
                     {{
-                        "title": "lesson title",
-                        "level": "educational level",
-                        "text": "detailed lesson content",
-                        "quiz": [
-                            {{
-                                "question": "question text",
-                                "options": ["option1", "option2", "option3", "option4"],
-                                "correct": 0
-                            }}
-                        ],
-                        "tts": true
+                        "question": "question text",
+                        "options": ["option1", "option2", "option3", "option4"],
+                        "correct": 0
                     }}
+                ],
+                "tts": true
+            }}
 
-                    Make sure the lesson is educational, accurate, and incorporates information from the provided reference content.
-                    """
+            CRITICAL: The "text" field must be complete and feel finished. Do not cut off mid-sentence or mid-thought. If you need to be concise, prioritize covering all essential points briefly rather than covering fewer points in detail.
+            """
 
-                    # Use the LLM service to generate the lesson
-                    lesson_content = llm_service.generate_response(prompt)
+            # Use the LLM service to generate the lesson
+            lesson_content = llm_service.generate_response(prompt)
 
-                    # Try to parse as JSON, if it fails, create structured response
-                    try:
-                        import json
-                        import re
+            # Helper function to ensure complete sentences
+            def ensure_complete_text(text: str, max_length: int = 1000) -> str:
+                """Ensure text ends at a complete sentence and doesn't exceed max_length"""
+                if not text:
+                    return text
+                
+                # If text is within limit, check if it ends properly
+                if len(text) <= max_length:
+                    # Check if text ends with proper punctuation
+                    text = text.strip()
+                    if text and text[-1] not in ['.', '!', '?', ':', ';']:
+                        # Find last complete sentence
+                        for punct in ['.', '!', '?', ':', ';']:
+                            last_punct = text.rfind(punct)
+                            if last_punct > len(text) * 0.7:  # If punctuation is in last 30%
+                                return text[:last_punct + 1].strip()
+                    return text
+                
+                # If text exceeds limit, truncate at last complete sentence
+                truncated = text[:max_length]
+                # Find last complete sentence before the limit
+                for punct in ['.', '!', '?', ':', ';']:
+                    last_punct = truncated.rfind(punct)
+                    if last_punct > max_length * 0.7:  # If punctuation is in last 30% of allowed length
+                        return truncated[:last_punct + 1].strip()
+                
+                # If no sentence boundary found, truncate at last word
+                last_space = truncated.rfind(' ')
+                if last_space > max_length * 0.8:
+                    return truncated[:last_space].strip() + "..."
+                
+                return truncated.strip() + "..."
 
-                        # Extract JSON from response
-                        json_start = lesson_content.find("{")
-                        json_end = lesson_content.rfind("}") + 1
+            # Try to parse as JSON, if it fails, create structured response
+            try:
+                import json
+                import re
 
-                        if json_start >= 0 and json_end > json_start:
-                            json_str = lesson_content[json_start:json_end]
-                            lesson_json = json.loads(json_str)
+                # Extract JSON from response
+                json_start = lesson_content.find("{")
+                json_end = lesson_content.rfind("}") + 1
 
-                            # Add metadata
-                            lesson_json["subject"] = subject
-                            lesson_json["topic"] = topic
-                            lesson_json["sources"] = sources_used
-                            lesson_json["knowledge_base_used"] = bool(knowledge_content)
-                            lesson_json["wikipedia_used"] = bool(wikipedia_content)
-                            lesson_json["generated_at"] = datetime.now().isoformat()
-                            lesson_json["status"] = "success"
+                if json_start >= 0 and json_end > json_start:
+                    json_str = lesson_content[json_start:json_end]
+                    lesson_json = json.loads(json_str)
 
-                            print("✅ Successfully generated lesson with knowledge base content")
-                            return JSONResponse(content=lesson_json)
-                        else:
-                            raise ValueError("No valid JSON found in response")
+                    # Ensure the text field is complete and within limit
+                    if "text" in lesson_json and lesson_json["text"]:
+                        lesson_json["text"] = ensure_complete_text(lesson_json["text"], max_length=1000)
+                        print(f"✅ Processed lesson text: {len(lesson_json['text'])} characters")
 
-                    except Exception as json_error:
-                        print(f"⚠️ JSON parsing failed: {json_error}, using fallback format")
-                        # Fallback to structured response
-                        lesson_data = {
-                            "title": f"Understanding {topic} in {subject}",
-                            "level": "intermediate",
-                            "text": lesson_content,
-                            "quiz": [
-                                {
-                                    "question": f"What is the main concept discussed in this lesson about {topic}?",
-                                    "options": [
-                                        f"Basic principles of {topic}",
-                                        f"Advanced applications of {topic}",
-                                        f"Historical context of {topic}",
-                                        f"Future developments in {topic}"
-                                    ],
-                                    "correct": 0
-                                }
-                            ],
-                            "tts": True,
-                            "subject": subject,
-                            "topic": topic,
-                            "sources": sources_used,
-                            "knowledge_base_used": bool(knowledge_content),
-                            "wikipedia_used": bool(wikipedia_content),
-                            "generated_at": datetime.now().isoformat(),
-                            "status": "success"
-                        }
-                        return JSONResponse(content=lesson_data)
+                    # Add metadata
+                    lesson_json["subject"] = subject
+                    lesson_json["topic"] = topic
+                    lesson_json["sources"] = sources_used
+                    lesson_json["knowledge_base_used"] = bool(knowledge_content)
+                    lesson_json["wikipedia_used"] = bool(wikipedia_content)
+                    lesson_json["generated_at"] = datetime.now().isoformat()
+                    lesson_json["status"] = "success"
 
+                    print("✅ Successfully generated lesson with knowledge base content")
+                    return JSONResponse(content=lesson_json)
                 else:
-                    print("⚠️ No relevant content found in knowledge base, falling back to basic generation")
+                    raise ValueError("No valid JSON found in response")
 
-            except Exception as kb_error:
-                print(f"⚠️ Knowledge base search failed: {kb_error}, falling back to basic generation")
+            except Exception as json_error:
+                print(f"⚠️ JSON parsing failed: {json_error}, using fallback format")
+                
+                # Helper function to ensure complete sentences (reuse from above)
+                def ensure_complete_text(text: str, max_length: int = 1000) -> str:
+                    """Ensure text ends at a complete sentence and doesn't exceed max_length"""
+                    if not text:
+                        return text
+                    
+                    # If text is within limit, check if it ends properly
+                    if len(text) <= max_length:
+                        # Check if text ends with proper punctuation
+                        text = text.strip()
+                        if text and text[-1] not in ['.', '!', '?', ':', ';']:
+                            # Find last complete sentence
+                            for punct in ['.', '!', '?', ':', ';']:
+                                last_punct = text.rfind(punct)
+                                if last_punct > len(text) * 0.7:  # If punctuation is in last 30%
+                                    return text[:last_punct + 1].strip()
+                        return text
+                    
+                    # If text exceeds limit, truncate at last complete sentence
+                    truncated = text[:max_length]
+                    # Find last complete sentence before the limit
+                    for punct in ['.', '!', '?', ':', ';']:
+                        last_punct = truncated.rfind(punct)
+                        if last_punct > max_length * 0.7:  # If punctuation is in last 30% of allowed length
+                            return truncated[:last_punct + 1].strip()
+                    
+                    # If no sentence boundary found, truncate at last word
+                    last_space = truncated.rfind(' ')
+                    if last_space > max_length * 0.8:
+                        return truncated[:last_space].strip() + "..."
+                    
+                    return truncated.strip() + "..."
+                
+                # Fallback to structured response
+                processed_text = ensure_complete_text(lesson_content, max_length=1000)
+                lesson_data = {
+                    "title": f"Understanding {topic} in {subject}",
+                    "level": "intermediate",
+                    "text": processed_text,
+                    "quiz": [
+                        {
+                            "question": f"What is the main concept discussed in this lesson about {topic}?",
+                            "options": [
+                                f"Basic principles of {topic}",
+                                f"Advanced applications of {topic}",
+                                f"Historical context of {topic}",
+                                f"Future developments in {topic}"
+                            ],
+                            "correct": 0
+                        }
+                    ],
+                    "tts": True,
+                    "subject": subject,
+                    "topic": topic,
+                    "sources": sources_used,
+                    "knowledge_base_used": bool(knowledge_content),
+                    "wikipedia_used": bool(wikipedia_content),
+                    "generated_at": datetime.now().isoformat(),
+                    "status": "success"
+                }
+                return JSONResponse(content=lesson_data)
+
+        else:
+            print("⚠️ No relevant content found in knowledge base, falling back to basic generation")
 
         # Fallback to basic lesson generation (when knowledge base is not used or fails)
         print("📝 Using basic lesson generation...")
@@ -537,18 +688,31 @@ async def generate_lesson(
                 print(f"⚠️ Wikipedia search failed: {wiki_error}")
 
         # Create a prompt for basic lesson generation
+        # Add language instruction if Arabic is selected
+        language_instruction = ""
+        if language.lower() == "arabic":
+            language_instruction = "\n\nLANGUAGE REQUIREMENT: Generate the ENTIRE lesson in Arabic (العربية). All content including title, text, and quiz questions must be in Arabic. Use proper Arabic script and formatting."
+        
         if wikipedia_content:
             prompt = f"""
-            Create a comprehensive lesson on the topic "{topic}" in the subject "{subject}" using the following Wikipedia content as reference:
+            Create a concise but complete lesson on the topic "{topic}" in the subject "{subject}" using the following Wikipedia content as reference:
 
             WIKIPEDIA CONTENT:
             {wikipedia_content}
 
+            IMPORTANT CONSTRAINTS:
+            - The "text" field must be concise and complete within approximately 1000 characters
+            - Prioritize completeness and clarity over length
+            - Ensure the lesson feels complete and doesn't end abruptly
+            - Cover the essential concepts clearly and concisely
+            - Make every word count - be precise and informative
+            {language_instruction}
+
             Please format your response as a JSON object with these exact fields:
             {{
                 "title": "lesson title",
                 "level": "educational level (beginner/intermediate/advanced)",
-                "text": "detailed lesson content incorporating the Wikipedia information",
+                "text": "concise but complete lesson content (approximately 800-1000 characters, must feel complete) incorporating the Wikipedia information. Include: introduction, key concepts, brief examples, and conclusion.",
                 "quiz": [
                     {{
                         "question": "question text",
@@ -559,18 +723,26 @@ async def generate_lesson(
                 "tts": true
             }}
 
-            Make the lesson educational, engaging, and based on the Wikipedia content provided.
+            CRITICAL: The "text" field must be complete and feel finished. Do not cut off mid-sentence or mid-thought. If you need to be concise, prioritize covering all essential points briefly rather than covering fewer points in detail.
             Include 3-5 quiz questions to test understanding.
             """
         else:
             prompt = f"""
-            Create a comprehensive lesson on the topic "{topic}" in the subject "{subject}".
+            Create a concise but complete lesson on the topic "{topic}" in the subject "{subject}".
+
+            IMPORTANT CONSTRAINTS:
+            - The "text" field must be concise and complete within approximately 1000 characters
+            - Prioritize completeness and clarity over length
+            - Ensure the lesson feels complete and doesn't end abruptly
+            - Cover the essential concepts clearly and concisely
+            - Make every word count - be precise and informative
+            {language_instruction}
 
             Please format your response as a JSON object with these exact fields:
             {{
                 "title": "lesson title",
                 "level": "educational level (beginner/intermediate/advanced)",
-                "text": "detailed lesson content with introduction, key concepts, examples, and summary",
+                "text": "concise but complete lesson content (approximately 800-1000 characters, must feel complete) with introduction, key concepts, brief examples, and summary. The text must feel complete and not truncated.",
                 "quiz": [
                     {{
                         "question": "question text",
@@ -581,9 +753,42 @@ async def generate_lesson(
                 "tts": true
             }}
 
-            Make the lesson educational, engaging, and appropriate for students.
+            CRITICAL: The "text" field must be complete and feel finished. Do not cut off mid-sentence or mid-thought. If you need to be concise, prioritize covering all essential points briefly rather than covering fewer points in detail.
             Include 3-5 quiz questions to test understanding.
             """
+
+        # Helper function to ensure complete sentences
+        def ensure_complete_text(text: str, max_length: int = 1000) -> str:
+            """Ensure text ends at a complete sentence and doesn't exceed max_length"""
+            if not text:
+                return text
+            
+            # If text is within limit, check if it ends properly
+            if len(text) <= max_length:
+                # Check if text ends with proper punctuation
+                text = text.strip()
+                if text and text[-1] not in ['.', '!', '?', ':', ';']:
+                    # Find last complete sentence
+                    for punct in ['.', '!', '?', ':', ';']:
+                        last_punct = text.rfind(punct)
+                        if last_punct > len(text) * 0.7:  # If punctuation is in last 30%
+                            return text[:last_punct + 1].strip()
+                return text
+            
+            # If text exceeds limit, truncate at last complete sentence
+            truncated = text[:max_length]
+            # Find last complete sentence before the limit
+            for punct in ['.', '!', '?', ':', ';']:
+                last_punct = truncated.rfind(punct)
+                if last_punct > max_length * 0.7:  # If punctuation is in last 30% of allowed length
+                    return truncated[:last_punct + 1].strip()
+            
+            # If no sentence boundary found, truncate at last word
+            last_space = truncated.rfind(' ')
+            if last_space > max_length * 0.8:
+                return truncated[:last_space].strip() + "..."
+            
+            return truncated.strip() + "..."
 
         # Use the LLM service to generate the lesson
         lesson_content = llm_service.generate_response(prompt)
@@ -598,6 +803,11 @@ async def generate_lesson(
             if json_start >= 0 and json_end > json_start:
                 json_str = lesson_content[json_start:json_end]
                 lesson_json = json.loads(json_str)
+
+                # Ensure the text field is complete and within limit
+                if "text" in lesson_json and lesson_json["text"]:
+                    lesson_json["text"] = ensure_complete_text(lesson_json["text"], max_length=1000)
+                    print(f"✅ Processed lesson text: {len(lesson_json['text'])} characters")
 
                 # Add metadata
                 lesson_json["subject"] = subject
@@ -615,10 +825,11 @@ async def generate_lesson(
         except Exception as json_error:
             print(f"⚠️ JSON parsing failed: {json_error}, using simple format")
             # Simple fallback format
+            processed_text = ensure_complete_text(lesson_content, max_length=1000)
             lesson_data = {
                 "title": f"Lesson on {subject}: {topic}",
                 "level": "intermediate",
-                "text": lesson_content,
+                "text": processed_text,
                 "quiz": [
                     {
                         "question": f"What is the main focus of this lesson on {topic}?",
@@ -1651,91 +1862,190 @@ async def proxy_video_generation_options():
 @app.post("/proxy/vision")
 async def proxy_video_generation(request: VideoGenerationRequest):
     """
-    Proxy endpoint to forward video generation requests to AnimateDiff API
+    Proxy endpoint to forward video generation requests to D-ID API
     This solves CORS issues by making server-to-server requests
     Supports both old format (prompt-based) and new format (comprehensive video format)
     """
     try:
-        # Check if this is the new comprehensive video format
-        if request.title and request.scenes and request.prompts:
-            # New comprehensive video format - forward as-is
-            payload = {
-                "title": request.title,
-                "level": request.level,
-                "duration": request.duration,
-                "tts_enabled": request.tts_enabled,
-                "scenes": request.scenes,
-                "prompts": request.prompts,
-                "text": request.text,
-                "video_style": request.video_style,
-                "style_modifiers": request.style_modifiers,
-                "metadata": request.metadata
-            }
-            print(f"🎬 Using new comprehensive video format")
-        else:
-            # Old format - convert to old payload structure
-            payload = {
-                "prompt": request.prompt,
-                "negative_prompt": request.negative_prompt,
-                "num_frames": request.num_frames,
-                "guidance_scale": request.guidance_scale,
-                "steps": request.steps,
-                "seed": request.seed,
-                "fps": request.fps
-            }
-            print(f"🎬 Using legacy prompt-based format")
+        print(f"🎬 Using D-ID API service")
+        return await generate_with_animediff(request)
 
-        # Use the target endpoint if provided, otherwise use default
-        target_url = request.target_endpoint or "https://a8df3061f7ec.ngrok-free.app/generate-video"
-
-        print(f"🎬 Proxying video generation request to: {target_url}")
-        print(f"🎬 Payload: {payload}")
-
-        # Headers for AnimateDiff API (read from env)
-        headers = {
-            "Content-Type": "application/json",
-            "x-api-key": os.getenv("VISION_API_KEY", ""),
-            "ngrok-skip-browser-warning": "true"
-        }
-
-        # Make the request to AnimateDiff API
-        async with httpx.AsyncClient(timeout=300.0) as client:  # 5 minute timeout for video generation
-            response = await client.post(target_url, json=payload, headers=headers)
-
-            print(f"🎬 AnimateDiff API response status: {response.status_code}")
-
-            if response.status_code == 200:
-                # Check if response is video content
-                content_type = response.headers.get("content-type", "")
-
-                if "video/" in content_type:
-                    # Return video content directly
-                    return Response(
-                        content=response.content,
-                        media_type=content_type,
-                        headers={
-                            "Content-Disposition": "attachment; filename=generated_video.mp4",
-                            "Access-Control-Allow-Origin": "*"
-                        }
-                    )
-                else:
-                    # Return JSON response
-                    return response.json()
-            else:
-                # Forward error response
-                error_detail = f"AnimateDiff API returned {response.status_code}: {response.text}"
-                print(f"🎬 Error: {error_detail}")
-                raise HTTPException(status_code=response.status_code, detail=error_detail)
-
-    except httpx.TimeoutException:
-        print("🎬 Request to AnimateDiff API timed out")
-        raise HTTPException(status_code=504, detail="Video generation request timed out")
-    except httpx.ConnectError:
-        print("🎬 Failed to connect to AnimateDiff API")
-        raise HTTPException(status_code=503, detail="Cannot connect to AnimateDiff service at 192.168.0.121:8501")
     except Exception as e:
         print(f"🎬 Proxy error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Proxy error: {str(e)}")
+
+
+async def generate_with_animediff(request: VideoGenerationRequest):
+    """Generate video using D-ID API"""
+    try:
+        import base64
+        import asyncio
+        
+        # Extract text/prompt from request
+        text_to_speak = ""
+        if request.title and request.scenes and request.prompts:
+            # New comprehensive video format - combine prompts into text
+            text_to_speak = " ".join([
+                p.get("text", "") if isinstance(p, dict) else str(p) 
+                for p in request.prompts[:3]
+            ])
+            if not text_to_speak and request.text:
+                text_to_speak = request.text[:500]
+        elif request.prompt:
+            text_to_speak = request.prompt
+        elif request.text:
+            text_to_speak = request.text[:500]
+        else:
+            raise HTTPException(status_code=400, detail="No text, prompt, or scenes provided")
+        
+        if not text_to_speak or len(text_to_speak.strip()) == 0:
+            raise HTTPException(status_code=400, detail="Text/prompt is empty")
+        
+        print(f"🎬 Using D-ID API to generate video")
+        print(f"🎬 Text: {text_to_speak[:100]}...")
+        
+        # D-ID API credentials
+        # D-ID uses Basic Auth: base64 encode "API_USERNAME:API_PASSWORD"
+        # Format: base64_encoded_email:api_password
+        default_key = "YmxhY2tob2xlaW5maXZlcnNlMzJAZ21haWwuY29t:fzOwO6FWwBJrudYd7VZDp"
+        did_api_key = os.getenv("DID_API_KEY", default_key)
+        did_api_url = "https://api.d-id.com"
+        
+        # Parse the API key and decode username if needed
+        if ":" in did_api_key:
+            parts = did_api_key.split(":", 1)
+            username_encoded = parts[0]
+            api_password = parts[1]
+            
+            # Decode the username (it's base64 encoded email)
+            try:
+                username = base64.b64decode(username_encoded).decode('utf-8')
+                print(f"🎬 Decoded username: {username}")
+            except Exception as decode_error:
+                print(f"⚠️ Failed to decode username, using as-is: {decode_error}")
+                username = username_encoded
+            
+            # D-ID Basic Auth: base64 encode "username:password"
+            auth_credentials = f"{username}:{api_password}"
+            auth_string = base64.b64encode(auth_credentials.encode()).decode()
+        else:
+            # If no colon, use the whole key as password with email as username
+            username = "blackholeinverse32@gmail.com"
+            api_password = did_api_key
+            auth_credentials = f"{username}:{api_password}"
+            auth_string = base64.b64encode(auth_credentials.encode()).decode()
+        
+        headers = {
+            "Authorization": f"Basic {auth_string}",
+            "Content-Type": "application/json"
+        }
+        
+        # Step 1: Create a talk/clip
+        # Using D-ID's text-to-video API (Clips API)
+        create_payload = {
+            "script": {
+                "type": "text",
+                "input": text_to_speak,
+                "provider": {
+                    "type": "microsoft",
+                    "voice_id": "en-US-JennyNeural"
+                }
+            },
+            "config": {
+                "result_format": "mp4"
+            }
+        }
+        
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            # Create clip
+            print(f"🎬 Creating D-ID clip...")
+            create_response = await client.post(
+                f"{did_api_url}/clips",
+                json=create_payload,
+                headers=headers
+            )
+            
+            if create_response.status_code != 201:
+                error_detail = f"D-ID API returned {create_response.status_code}: {create_response.text}"
+                print(f"🎬 Error creating clip: {error_detail}")
+                raise HTTPException(status_code=create_response.status_code, detail=error_detail)
+            
+            clip_data = create_response.json()
+            clip_id = clip_data.get("id")
+            
+            if not clip_id:
+                raise HTTPException(status_code=500, detail="D-ID API did not return clip ID")
+            
+            print(f"🎬 Clip created with ID: {clip_id}")
+            print(f"🎬 Status: {clip_data.get('status')}")
+            
+            # Step 2: Poll for completion
+            max_attempts = 60  # 5 minutes max (5 second intervals)
+            attempt = 0
+            
+            while attempt < max_attempts:
+                await asyncio.sleep(5)  # Wait 5 seconds between checks
+                
+                status_response = await client.get(
+                    f"{did_api_url}/clips/{clip_id}",
+                    headers=headers
+                )
+                
+                if status_response.status_code != 200:
+                    error_detail = f"D-ID API status check returned {status_response.status_code}: {status_response.text}"
+                    print(f"🎬 Error checking status: {error_detail}")
+                    raise HTTPException(status_code=status_response.status_code, detail=error_detail)
+                
+                status_data = status_response.json()
+                status = status_data.get("status")
+                
+                print(f"🎬 Clip status: {status} (attempt {attempt + 1}/{max_attempts})")
+                
+                if status == "done":
+                    # Get video URL
+                    result_url = status_data.get("result_url")
+                    if result_url:
+                        print(f"🎬 Video ready! Downloading from: {result_url}")
+                        
+                        # Download video
+                        video_response = await client.get(result_url, timeout=60.0)
+                        
+                        if video_response.status_code == 200:
+                            return Response(
+                                content=video_response.content,
+                                media_type="video/mp4",
+                                headers={
+                                    "Content-Disposition": "attachment; filename=generated_video.mp4",
+                                    "Access-Control-Allow-Origin": "*"
+                                }
+                            )
+                        else:
+                            raise HTTPException(status_code=500, detail="Failed to download video from D-ID")
+                    else:
+                        raise HTTPException(status_code=500, detail="D-ID did not provide result_url")
+                
+                elif status == "error":
+                    error_msg = status_data.get("error", {}).get("message", "Unknown error")
+                    raise HTTPException(status_code=500, detail=f"D-ID generation failed: {error_msg}")
+                
+                attempt += 1
+            
+            # Timeout
+            raise HTTPException(status_code=504, detail="Video generation timed out after 5 minutes")
+
+    except httpx.TimeoutException:
+        print("🎬 Request to D-ID API timed out")
+        raise HTTPException(status_code=504, detail="Video generation request timed out")
+    except httpx.ConnectError:
+        print("🎬 Failed to connect to D-ID API")
+        raise HTTPException(status_code=503, detail="Cannot connect to D-ID API. Check your internet connection.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"🎬 D-ID error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"D-ID error: {str(e)}")
 
 @app.options("/test-generate-video")
 async def test_video_generation_options():
@@ -1785,7 +2095,9 @@ async def test_video_generation(request: VideoGenerationRequest):
             }
             print(f"🎬 Test endpoint using legacy prompt-based format")
 
-        target_url = "https://a8df3061f7ec.ngrok-free.app/test-generate-video"
+        # Use env var for test endpoint or default
+        vision_api_url = os.getenv("VISION_API_URL", "http://localhost:8501")
+        target_url = f"{vision_api_url}/test-generate-video" if not vision_api_url.endswith("/test-generate-video") else vision_api_url.replace("/generate-video", "/test-generate-video")
 
         print(f"🎬 Proxying test video generation request to: {target_url}")
 

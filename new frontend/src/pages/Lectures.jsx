@@ -4,8 +4,16 @@ import { useQuery } from "@tanstack/react-query";
 import CenteredLoader from "../components/CenteredLoader";
 import { getLectures } from "../api";
 import { Play } from "lucide-react";
+import { useSelector } from "react-redux";
+import { selectUser } from "../store/authSlice";
+import { processLecturesUsage, dispatchKarmaChange } from "../utils/karmaManager";
+import { toast } from "react-hot-toast";
+import { useTranslation } from "react-i18next";
 
 export default function Lectures() {
+  const user = useSelector(selectUser);
+  const { t } = useTranslation();
+  
   const {
     data: lectures,
     isLoading,
@@ -15,6 +23,19 @@ export default function Lectures() {
     queryKey: ["lectures"],
     queryFn: getLectures,
   });
+
+  const handleLectureClick = () => {
+    // Process karma when user clicks on a lecture
+    const effectiveUserId = user?.id || user?.user_id || 'guest-user';
+    const karmaResult = processLecturesUsage(effectiveUserId);
+    if (karmaResult) {
+      dispatchKarmaChange(karmaResult);
+      toast.success(`+${karmaResult.change} Karma: ${karmaResult.reason}`, {
+        position: "top-right",
+        duration: 3000,
+      });
+    }
+  };
 
   // dynamic tilt handlers
   const handleMouseEnter = (e) => {
@@ -44,13 +65,13 @@ export default function Lectures() {
         className="text-4xl md:text-5xl font-extrabold mb-6 drop-shadow-lg transition-all duration-300 hover:bg-gradient-to-r hover:from-white hover:to-[#FF9933] hover:bg-clip-text hover:text-transparent"
         style={{ color: "#FFFFFF", fontFamily: "Nunito, sans-serif" }}
       >
-        Lectures
+        {t("Lectures")}
       </h2>
       <p
         className="text-lg md:text-xl font-medium mb-4"
         style={{ color: "#FFFFFF", fontFamily: "Nunito, sans-serif" }}
       >
-        Watch lectures and video content here.
+        {t("Watch lectures and video content here.")}
       </p>
       {isLoading ? (
         <div className="relative" style={{ height: "calc(100vh - 350px)" }}>
@@ -58,7 +79,7 @@ export default function Lectures() {
         </div>
       ) : isError ? (
         <p className="text-red-500">
-          {error?.message || "Failed to fetch lectures."}
+          {error?.message || t("Failed to fetch lectures.")}
         </p>
       ) : lectures && Array.isArray(lectures) && lectures.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-8">
@@ -72,13 +93,17 @@ export default function Lectures() {
               onMouseEnter={handleMouseEnter}
               onMouseMove={handleMouseMove}
               onMouseLeave={handleMouseLeave}
+              onClick={handleLectureClick}
             >
               <div className="flip-card-inner">
                 <div className="flip-card-front relative overflow-hidden rounded-xl shadow-lg border border-white/20">
                   <img
-                    src={lecture.image || lecture.thumbnail}
+                    src={lecture.image || lecture.thumbnail || "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=400&h=300&fit=crop"}
                     alt={lecture.title}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.src = "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=400&h=300&fit=crop";
+                    }}
                   />
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                     <div className="bg-orange-500 bg-opacity-75 rounded-full p-3">
@@ -97,8 +122,8 @@ export default function Lectures() {
         </div>
       ) : (
         <div className="text-center py-12">
-          <p className="text-white/70 text-lg">No lectures available at the moment.</p>
-          <p className="text-white/50 text-sm mt-2">Please check back later for new content.</p>
+          <p className="text-white/70 text-lg">{t("No lectures available at the moment.")}</p>
+          <p className="text-white/50 text-sm mt-2">{t("Please check back later for new content.")}</p>
         </div>
       )}
       {/* Tilt card styles */}

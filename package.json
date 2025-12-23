@@ -1,0 +1,17 @@
+{
+  "name": "gurukul-platform",
+  "version": "1.0.0",
+  "description": "Gurukul Learning Platform - AI-Powered Education",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "education",
+    "ai",
+    "learning",
+    "platform"
+  ],
+  "author": "Gurukul Team",
+  "license": "MIT"
+}

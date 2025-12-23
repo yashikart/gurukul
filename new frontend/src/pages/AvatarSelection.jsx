@@ -11,6 +11,7 @@ import GlassContainer from "../components/GlassContainer";
 import AvatarSettingsTabs from "../components/AvatarSettingsTabs";
 import { toast } from "react-hot-toast";
 import gsap from "gsap";
+import { useTranslation } from "react-i18next";
 // Note: storage utils now handled by individual components
 import { User, Heart, Upload } from "lucide-react";
 
@@ -43,6 +44,7 @@ import { usePerformanceMonitor } from "../hooks/usePerformanceMonitor";
 
 
 export default function AvatarSelection() {
+  const { t } = useTranslation();
   const dispatch = useDispatch();
   const containerRef = useRef(null);
 
@@ -146,8 +148,8 @@ export default function AvatarSelection() {
   // Optimized event handlers with useCallback to prevent unnecessary re-renders
   const resetPinnedAvatar = useCallback(() => {
     dispatch(resetPinSettings());
-    toast.success("Avatar reset to default position");
-  }, [dispatch]);
+    toast.success(t("Avatar reset to default position"));
+  }, [dispatch, t]);
 
   // Tab switching handler
   const handleTabChange = useCallback((tabId) => {
@@ -157,18 +159,18 @@ export default function AvatarSelection() {
   // Save current avatar position and settings
   const handleSavePosition = useCallback(() => {
     if (!selectedAvatar) {
-      toast.error("No avatar selected");
+      toast.error(t("No avatar selected"));
       return;
     }
 
     try {
       dispatch(autoSaveAvatarSettings());
-      toast.success(`Position saved for "${selectedAvatar.name}"!`);
+      toast.success(t("Position saved for") + ` "${selectedAvatar.name}"!`);
     } catch (error) {
       console.error("Error saving avatar position:", error);
-      toast.error("Failed to save position");
+      toast.error(t("Failed to save position"));
     }
-  }, [selectedAvatar, dispatch]);
+  }, [selectedAvatar, dispatch, t]);
 
   // Note: Auto-save is now handled by the useAvatarPersistence hook and Redux
 
@@ -194,13 +196,13 @@ export default function AvatarSelection() {
         indexedDB.deleteDatabase("gurukul-avatars");
       }
 
-      toast.success("Storage cleared! Reloading page...");
+      toast.success(t("Storage cleared! Reloading page..."));
       setTimeout(() => window.location.reload(), 1000);
     } catch (error) {
       console.error("Emergency storage clear failed:", error);
-      toast.error("Failed to clear storage");
+      toast.error(t("Failed to clear storage"));
     }
-  }, []);
+  }, [t]);
 
   // Removed old save avatar function - now using favorites only
 
@@ -211,10 +213,10 @@ export default function AvatarSelection() {
           {/* Simple Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-white mb-2">
-              Avatar Management
+              {t("Avatar Management")}
             </h1>
             <p className="text-white/60">
-              Manage your favorite avatars
+              {t("Manage your favorite avatars")}
             </p>
           </div>
 
@@ -230,7 +232,7 @@ export default function AvatarSelection() {
                 }`}
               >
                 <Heart className="w-4 h-4" />
-                <span className="font-medium">Favorites</span>
+                <span className="font-medium">{t("Favorites")}</span>
               </button>
               <button
                 onClick={() => handleTabChange("custom-models")}
@@ -241,7 +243,7 @@ export default function AvatarSelection() {
                 }`}
               >
                 <Upload className="w-4 h-4" />
-                <span className="font-medium text-sm">Upload</span>
+                <span className="font-medium text-sm">{t("Upload")}</span>
               </button>
             </div>
 
@@ -283,18 +285,18 @@ export default function AvatarSelection() {
                   <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-6 h-full flex flex-col items-center justify-center">
                     <div className="text-white/50 text-center">
                       <User className="w-16 h-16 mx-auto mb-3 opacity-50" />
-                      <p className="text-lg mb-2">Select an Avatar</p>
+                      <p className="text-lg mb-2">{t("Select an Avatar")}</p>
                       <p className="text-sm mb-6">
-                        Choose an avatar from your favorites to customize it
+                        {t("Choose an avatar from your favorites to customize it")}
                       </p>
 
                       {/* Emergency Storage Clear Button */}
                       <button
                         onClick={handleEmergencyStorageClear}
                         className="px-4 py-2 bg-red-500/20 text-red-400 text-xs rounded hover:bg-red-500/30 transition-colors border border-red-500/30"
-                        title="Clear all storage data if experiencing issues"
+                        title={t("Clear all storage data if experiencing issues")}
                       >
-                        🚨 Emergency Clear Storage
+                        🚨 {t("Emergency Clear Storage")}
                       </button>
                     </div>
                   </div>

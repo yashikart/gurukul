@@ -81,15 +81,15 @@ export default function Home() {
   // Tooltip descriptions for hover functionality
   const getTooltipDescription = (section) => {
     const descriptions = {
-      dashboard: "Track your learning progress, set goals, view achievements, and get AI-powered insights to stay motivated in your learning journey.",
-      subjects: "Explore any topic with custom AI-generated lessons. From mathematics to literature, get structured content tailored to your interests.",
-      summarizer: "Upload documents and get instant AI-powered summaries. Extract key points, generate study notes, and ask questions about your content.",
-      chatbot: "Have unlimited conversations with AI. Multiple models available, chat history saved, and context-aware discussions on any topic.",
-      tests: "Assess your knowledge with custom quizzes and practice exams. Get instant feedback and track your performance over time.",
-      lectures: "Access curated educational video content from expert instructors. Interactive players with organized, topic-based learning materials."
+      dashboard: t("Track your learning progress, set goals, view achievements, and get AI-powered insights to stay motivated in your learning journey."),
+      subjects: t("Explore any topic with custom AI-generated lessons. From mathematics to literature, get structured content tailored to your interests."),
+      summarizer: t("Upload documents and get instant AI-powered summaries. Extract key points, generate study notes, and ask questions about your content."),
+      chatbot: t("Have unlimited conversations with AI. Multiple models available, chat history saved, and context-aware discussions on any topic."),
+      tests: t("Assess your knowledge with custom quizzes and practice exams. Get instant feedback and track your performance over time."),
+      lectures: t("Access curated educational video content from expert instructors. Interactive players with organized, topic-based learning materials.")
     };
 
-    return descriptions[section] || "Explore this section of Gurukul!";
+    return descriptions[section] || t("Explore this section of Gurukul!");
   };
 
   // Navigation descriptions for avatar chat (keeping original for avatar interactions)
@@ -353,7 +353,7 @@ Perfect for visual learners and those who prefer structured, presentation-style 
             textShadow: "0 1px 4px rgba(0, 0, 0, 0.6)"
           }}
         >
-          Your intelligent learning companion for lifelong growth and discovery
+          {t("Your intelligent learning companion for lifelong growth and discovery")}
         </p>
 
         <div
@@ -369,7 +369,7 @@ Perfect for visual learners and those who prefer structured, presentation-style 
             onMouseEnter={(e) => handleTooltipHover("dashboard", e)}
             onMouseLeave={handleTooltipLeave}
           >
-            Dashboard
+            {t("Dashboard")}
           </GlassButton>
 
           <GlassButton
@@ -380,7 +380,7 @@ Perfect for visual learners and those who prefer structured, presentation-style 
             onMouseEnter={(e) => handleTooltipHover("subjects", e)}
             onMouseLeave={handleTooltipLeave}
           >
-            Subjects
+            {t("Subjects")}
           </GlassButton>
 
           <GlassButton
@@ -391,7 +391,7 @@ Perfect for visual learners and those who prefer structured, presentation-style 
             onMouseEnter={(e) => handleTooltipHover("summarizer", e)}
             onMouseLeave={handleTooltipLeave}
           >
-            Summarizer
+            {t("Summarizer")}
           </GlassButton>
 
           {/* Second row */}
@@ -403,7 +403,7 @@ Perfect for visual learners and those who prefer structured, presentation-style 
             onMouseEnter={(e) => handleTooltipHover("chatbot", e)}
             onMouseLeave={handleTooltipLeave}
           >
-            Chatbot
+            {t("Chatbot")}
           </GlassButton>
 
           <GlassButton
@@ -414,7 +414,7 @@ Perfect for visual learners and those who prefer structured, presentation-style 
             onMouseEnter={(e) => handleTooltipHover("tests", e)}
             onMouseLeave={handleTooltipLeave}
           >
-            Tests
+            {t("Test")}
           </GlassButton>
 
           <GlassButton
@@ -425,7 +425,7 @@ Perfect for visual learners and those who prefer structured, presentation-style 
             onMouseEnter={(e) => handleTooltipHover("lectures", e)}
             onMouseLeave={handleTooltipLeave}
           >
-            Lectures
+            {t("Lectures")}
           </GlassButton>
 
           {/* Third row */}

@@ -1,6 +1,5 @@
 import { storage } from "./storageUtils";
 import { toast } from "react-hot-toast";
-import { useClerk } from "@clerk/clerk-react";
 
 /**
  * Thoroughly clears authentication data from storage while preserving avatar data
@@ -36,7 +35,7 @@ export const clearAuthData = () => {
  * @returns {Promise<boolean>} True if the user is deleted and was signed out, false otherwise
  */
 export const checkAndHandleDeletedAccount = async () => {
-  // With Clerk, account deletion is managed via Admin API; skip client check
+  // With Supabase, account deletion is managed via Admin API; skip client check
   return false;
 };
 

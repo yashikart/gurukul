@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAutoPlayDedicatedChatbotTTS } from "../hooks/useDedicatedChatbotTTS";
 import {
   Send,
@@ -58,6 +59,8 @@ import {
   setIsSpeaking,
 } from "../store/avatarSlice";
 import { selectUser } from "../store/authSlice";
+import { useAuth } from "../context/AuthContext";
+
 import { usePageContext, formatContextForAI } from "../hooks/usePageContext";
 import { TerminalMessage } from "./TerminalTypewriter";
 import { CHAT_API_BASE_URL } from "../config";
@@ -415,10 +418,12 @@ const QuickActionButtons = ({ onAction, isFirstTime = false }) => {
  * Positioned near the avatar with context-aware AI responses and typewriter effects
  */
 export default function AvatarChatInterface({ avatarPosition }) {
+  const { t } = useTranslation();
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const user = useSelector(selectUser);
-  const { isSignedIn, user: clerkUser } = useUser();
+  const { user } = useAuth();
+  const isSignedIn = !!user;
+  const clerkUser = user;
   const isChatOpen = useSelector(selectIsChatOpen);
   const isChatExpanded = useSelector(selectIsChatExpanded);
   const chatHistory = useSelector(selectChatHistory);
@@ -454,6 +459,7 @@ export default function AvatarChatInterface({ avatarPosition }) {
     return localStorage.getItem('avatarTTSMuted') === 'true';
   });
   const [lastProcessedMessageId, setLastProcessedMessageId] = useState("");
+  const [playingMessageId, setPlayingMessageId] = useState(null);
 
   // Direct TTS integration using the service
   const [serviceHealthy, setServiceHealthy] = useState(false);
@@ -603,6 +609,81 @@ export default function AvatarChatInterface({ avatarPosition }) {
     }
   }, [serviceHealthy, isTTSMuted, dispatch]);
 
+  // Function to speak individual message (for play button)
+  const speakIndividualMessage = useCallback(async (text, messageId) => {
+    if (!serviceHealthy || isTTSMuted || !text || !text.trim()) {
+      return;
+    }
+
+    // Stop any currently playing message
+    if (playingMessageId) {
+      try {
+        const dedicatedTTSService = (await import('../services/dedicatedChatbotTTSService')).default;
+        dedicatedTTSService.stopTTS();
+        setPlayingMessageId(null);
+        dispatch(setIsSpeaking(false));
+      } catch (error) {
+        // Ignore errors when stopping
+      }
+    }
+
+    try {
+      // Import TTS services dynamically
+      const dedicatedTTSService = (await import('../services/dedicatedChatbotTTSService')).default;
+      const regularTTSService = (await import('../services/ttsService')).default;
+
+      // Clean the text for better speech
+      const cleanText = text
+        .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold markdown
+        .replace(/\*(.*?)\*/g, '$1') // Remove italic markdown
+        .replace(/`(.*?)`/g, '$1') // Remove code markdown
+        .replace(/#{1,6}\s/g, '') // Remove headers
+        .replace(/\n+/g, '. ') // Replace newlines with periods
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .trim();
+
+      if (!cleanText) return;
+
+      // Set this message as playing
+      setPlayingMessageId(messageId);
+
+      // Try dedicated chatbot service first, fallback to regular TTS service
+      let ttsService = dedicatedTTSService;
+      let serviceHealthyCheck = await dedicatedTTSService.checkServiceHealth();
+
+      if (!serviceHealthyCheck) {
+        ttsService = regularTTSService;
+        serviceHealthyCheck = await regularTTSService.checkServiceHealth();
+      }
+
+      if (!serviceHealthyCheck) {
+        setPlayingMessageId(null);
+        return;
+      }
+
+      // Play the TTS with visual feedback
+      await ttsService.playTTS(cleanText, {
+        volume: 0.8,
+        onPlayStart: () => {
+          dispatch(setIsSpeaking(true)); // Show speaking animation
+        },
+        onPlayEnd: () => {
+          dispatch(setIsSpeaking(false)); // Hide speaking animation
+          setPlayingMessageId(null); // Clear playing message ID
+        },
+        onError: (error) => {
+          dispatch(setIsSpeaking(false)); // Hide speaking animation on error
+          setPlayingMessageId(null); // Clear playing message ID on error
+        }
+      });
+
+    } catch (error) {
+      // Silently handle TTS errors to avoid disrupting UX
+      dispatch(setIsSpeaking(false));
+      setPlayingMessageId(null);
+    }
+  }, [serviceHealthy, isTTSMuted, dispatch, playingMessageId]);
+
   // Monitor chat history for new assistant messages and speak them automatically
   useEffect(() => {
     if (!serviceHealthy || !ttsInitialized || isTTSMuted || chatHistory.length === 0) {
@@ -638,7 +719,14 @@ export default function AvatarChatInterface({ avatarPosition }) {
 
     // Stop current TTS if muting
     if (newMutedState) {
-      dispatch(setIsSpeaking(false));
+      try {
+        const dedicatedTTSService = (await import('../services/dedicatedChatbotTTSService')).default;
+        dedicatedTTSService.stopTTS();
+        setPlayingMessageId(null);
+        dispatch(setIsSpeaking(false));
+      } catch (error) {
+        // Ignore errors when stopping
+      }
     } else {
       // When unmuting, ensure dedicated chatbot TTS service is properly initialized
       try {
@@ -747,57 +835,57 @@ export default function AvatarChatInterface({ avatarPosition }) {
       const isFirstTimeUser = localStorage.getItem("gurukul_visited") !== "true";
 
       if (isFirstTimeUser && (pathname === "/home" || pathname === "/")) {
-        return `🎓 Hey there! I'm ${avatarName}, your personal AI learning companion!
+        return `🎓 ${t("Hey there! I'm")} ${avatarName}, ${t("your personal AI learning companion!")}
 
-Welcome to your gateway to academic excellence! Let me show you around this amazing learning platform:
+${t("Welcome to your gateway to academic excellence! Let me show you around this amazing learning platform:")}
 
-📊 **Dashboard** - Your learning command center! Track progress, view achievements, and get personalized insights
-📚 **Subjects** - Dive into various academic topics and structured courses tailored to your level
-📄 **Summarizer** - Upload any document (PDF, text, etc.) and get instant AI-powered summaries and explanations
-💬 **Chatbot** - Have in-depth conversations with me about any topic - I'm here 24/7 to help you learn
-📝 **Tests** - Take assessments to evaluate your knowledge and identify areas for improvement
-🎥 **Lectures** - Access curated educational video content and interactive learning materials
+📊 **${t("Dashboard")}** - ${t("Your learning command center! Track progress, view achievements, and get personalized insights")}
+📚 **${t("Subjects")}** - ${t("Dive into various academic topics and structured courses tailored to your level")}
+📄 **${t("Summarizer")}** - ${t("Upload any document (PDF, text, etc.) and get instant AI-powered summaries and explanations")}
+💬 **${t("Chatbot")}** - ${t("Have in-depth conversations with me about any topic - I'm here 24/7 to help you learn")}
+📝 **${t("Test")}** - ${t("Take assessments to evaluate your knowledge and identify areas for improvement")}
+🎥 **${t("Lectures")}** - ${t("Access curated educational video content and interactive learning materials")}
 
-✨ **Interactive Features:**
-• **Click the action buttons** below to jump straight to any section
-• **Ask me questions** - I understand natural language perfectly
-• **I'll follow you** around the site providing contextual help
-• **Smart suggestions** - I adapt to each page you visit
-• **Instant help** - No waiting, I respond immediately
+✨ **${t("Interactive Features")}:**
+• ${t("Click the action buttons below to jump straight to any section")}
+• ${t("Ask me questions - I understand natural language perfectly")}
+• ${t("I'll follow you around the site providing contextual help")}
+• ${t("Smart suggestions - I adapt to each page you visit")}
+• ${t("Instant help - No waiting, I respond immediately")}
 
-🚀 **Quick Start Options:**
-Use the interactive buttons below to dive right in, or just tell me what you want to do! I can take you anywhere and help with anything.
+🚀 **${t("Quick Start Options")}:**
+${t("Use the interactive buttons below to dive right in, or just tell me what you want to do! I can take you anywhere and help with anything.")}
 
-Ready to start your learning adventure?`;
+${t("Ready to start your learning adventure?")}`;
       }
 
       // First-time user on other pages - give them a brief intro and guide them
       if (isFirstTimeUser) {
-        return `🎓 Hello! I'm ${avatarName}, your AI learning companion!
+        return `🎓 ${t("Hello! I'm")} ${avatarName}, ${t("your AI learning companion")}!
 
-I see you're ${pageInfo.description}. Since this is your first time here, let me quickly introduce this platform:
+${t("I can see you're")} ${pageInfo.description}. ${t("Since this is your first time here, let me quickly introduce this platform:")}
 
-This is your personalized learning platform with AI-powered tools for studying, document analysis, interactive chat, tests, and more!
+${t("This is your personalized learning platform with AI-powered tools for studying, document analysis, interactive chat, tests, and more!")}
 
-I'm here to help you navigate and make the most of every feature. Try asking me about what you see on this page, or say "show me around" for a full tour!
+${t("I'm here to help you navigate and make the most of every feature. Try asking me about what you see on this page, or say \"show me around\" for a full tour!")}
 
-What would you like to know?`;
+${t("What would you like to know?")}`;
       }
 
       // For returning users on first time opening chat, use page-specific welcome message
       const welcomeMessages = {
-        '/dashboard': `Hello! I'm ${avatarName}, your AI learning companion. I can see you're on the dashboard. Ready to explore your learning analytics?`,
-        '/subjects': `Hello! I'm ${avatarName}, your AI learning companion. I see you're browsing subjects. What topic interests you today?`,
-        '/learn': `Hello! I'm ${avatarName}, your AI learning companion. Ready to analyze some documents? I can help with summaries and explanations.`,
-        '/chatbot': `Hello! I'm ${avatarName}, your AI learning companion. Welcome to our main conversation space. How can I assist you?`,
-        '/test': `Hello! I'm ${avatarName}, your AI learning companion. I see you're in the assessment center. Need help with test preparation?`,
-        '/lectures': `Hello! I'm ${avatarName}, your AI learning companion. Ready to explore some educational content? I can supplement any lectures.`,
-        '/avatar-selection': `Hello! I'm ${avatarName}, your AI learning companion. I see you're customizing your avatar experience. Need any guidance?`,
-        '/settings': `Hello! I'm ${avatarName}, your AI learning companion. I see you're in the settings panel. Need help with configuration?`,
-        '/agent-simulator': `Hello! I'm ${avatarName}, your AI learning companion. Interesting! You're exploring the agent simulator. How can I help?`,
+        '/dashboard': `${t("Hello! I'm")} ${avatarName}, ${t("your AI learning companion")}. ${t("I can see you're on the dashboard. Ready to explore your learning analytics?")}`,
+        '/subjects': `${t("Hello! I'm")} ${avatarName}, ${t("your AI learning companion")}. ${t("I see you're browsing subjects. What topic interests you today?")}`,
+        '/learn': `${t("Hello! I'm")} ${avatarName}, ${t("your AI learning companion")}. ${t("Ready to analyze some documents? I can help with summaries and explanations.")}`,
+        '/chatbot': `${t("Hello! I'm")} ${avatarName}, ${t("your AI learning companion")}. ${t("Welcome to our main conversation space. How can I assist you?")}`,
+        '/test': `${t("Hello! I'm")} ${avatarName}, ${t("your AI learning companion")}. ${t("I see you're in the assessment center. Need help with test preparation?")}`,
+        '/lectures': `${t("Hello! I'm")} ${avatarName}, ${t("your AI learning companion")}. ${t("Ready to explore some educational content? I can supplement any lectures.")}`,
+        '/avatar-selection': `${t("Hello! I'm")} ${avatarName}, ${t("your AI learning companion")}. ${t("I see you're customizing your avatar experience. Need any guidance?")}`,
+        '/settings': `${t("Hello! I'm")} ${avatarName}, ${t("your AI learning companion")}. ${t("I see you're in the settings panel. Need help with configuration?")}`,
+        '/agent-simulator': `${t("Hello! I'm")} ${avatarName}, ${t("your AI learning companion")}. ${t("Interesting! You're exploring the agent simulator. How can I help?")}`,
       };
 
-      return welcomeMessages[pathname] || `Hello! I'm ${avatarName}, your AI learning companion. I can see you're ${pageInfo.description}. How can I help you?`;
+      return welcomeMessages[pathname] || `${t("Hello! I'm")} ${avatarName}, ${t("your AI learning companion")}. ${t("I can see you're")} ${pageInfo.description}. ${t("How can I help you?")}`;
     }
 
     // Context-aware transition messages for page changes (when isFirstTime = false)
@@ -886,7 +974,7 @@ What would you like to know?`;
 
   // Function to get simple placeholder text
   const getSmartPlaceholder = () => {
-    return "ask UniGuru anything...";
+    return t("ask UniGuru anything...");
   };
 
   // Direct API functions (same as main chatbot)
@@ -1116,7 +1204,7 @@ What would you like to know?`;
         markGreetingAsShown();
       } else {
         // Subsequent opens in same session - show brief welcome
-        welcomeContent = `Hello again! I'm ${avatarName}. How can I help you?`;
+        welcomeContent = `${t("Hello again! I'm")} ${avatarName}. ${t("How can I help you?")}`;
       }
 
       // Always show a welcome message when chat opens
@@ -1970,9 +2058,9 @@ What specific help do you need?`;
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-white/60 hover:text-orange-500 transition-colors duration-200 cursor-pointer"
-              title="Visit UniGuru"
+              title={t("Visit UniGuru")}
             >
-              Powered By UniGuru
+              {t("Powered By UniGuru")}
             </a>
           </div>
           <div className="flex items-center gap-1">
@@ -1987,7 +2075,7 @@ What specific help do you need?`;
             <button
               onClick={toggleChatExpansion}
               className="p-1 rounded hover:bg-orange-500/20 transition-colors"
-              title={isChatExpanded ? "Collapse chat" : "Expand chat"}
+              title={isChatExpanded ? t("Collapse chat") : t("Expand chat")}
             >
               {isChatExpanded ? (
                 <Minimize2 className="w-4 h-4 text-orange-500" />
@@ -1999,7 +2087,7 @@ What specific help do you need?`;
             <button
               onClick={toggleTTSMute}
               className="p-1 rounded hover:bg-white/10 transition-colors"
-              title={isTTSMuted ? "Unmute voice" : "Mute voice"}
+              title={isTTSMuted ? t("Unmute voice") : t("Mute voice")}
             >
               {isTTSMuted ? (
                 <VolumeX className="w-4 h-4 text-white/60" />
@@ -2012,7 +2100,7 @@ What specific help do you need?`;
               <button
                 onClick={() => dispatch(setIsChatOpen(false))}
                 className="p-1 rounded hover:bg-red-500/20 transition-colors"
-                title="Close chat"
+                title={t("Close chat")}
               >
                 <X className="w-4 h-4 text-red-400 hover:text-red-300" />
               </button>
@@ -2037,6 +2125,9 @@ What specific help do you need?`;
               isUser={message.role === "user"}
               isTyping={currentlyTypingMessageId === message.id}
               onTypingComplete={() => handleTypingComplete(message.id)}
+              onPlayAudio={speakIndividualMessage}
+              isPlaying={playingMessageId === message.id}
+              isTTSMuted={isTTSMuted}
             />
           ))}
           {/* Show loading indicator when waiting for response */}
@@ -2054,7 +2145,7 @@ What specific help do you need?`;
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyPress}
-              placeholder={isLoadingResponse ? "processing..." : getSmartPlaceholder()}
+              placeholder={isLoadingResponse ? t("processing...") : getSmartPlaceholder()}
               className="flex-1 bg-transparent border-none outline-none text-white placeholder-white/40 font-mono text-sm"
               disabled={isTyping || isLoadingResponse}
             />
@@ -2072,7 +2163,7 @@ What specific help do you need?`;
               <button
                 onClick={handleStopQuery}
                 className="text-red-400 hover:text-red-300 transition-colors animate-pulse"
-                title="Stop current query"
+                title={t("Stop current query")}
               >
                 <Square className="w-3 h-3 fill-current" />
               </button>

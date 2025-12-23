@@ -1,103 +1,113 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { toast } from "react-hot-toast";
-import { Mail, Lock, UserPlus, RefreshCcw } from "lucide-react";
+import { Mail, Lock, UserPlus } from "lucide-react";
 import GlassInput from "../components/GlassInput";
 import GlassButton from "../components/GlassButton";
-import { useSignUp } from "@clerk/clerk-react";
+import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 export default function SignUp() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
-  const [step, setStep] = useState("email");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const { isLoaded, signUp } = useSignUp();
-
-  useEffect(() => {
-    // Ensure CAPTCHA div exists
-    if (!document.getElementById("clerk-captcha")) {
-      console.warn("CAPTCHA div not found");
-    }
-  }, []);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleSignUp = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
+    setLoading(true);
 
-    if (!email || !password) {
-      setError("Please enter both email and password.");
-      toast.error("Please enter both email and password.", {
+    // Validation
+    if (!email || !password || !confirmPassword) {
+      setError(t("Please fill in all fields."));
+      toast.error(t("Please fill in all fields."), {
         position: "top-right",
       });
+      setLoading(false);
       return;
     }
 
-    // Check if CAPTCHA div exists
-    if (!document.getElementById("clerk-captcha")) {
-      setError("CAPTCHA not ready. Please refresh the page.");
-      toast.error("CAPTCHA not ready. Please refresh the page.", {
+    if (password !== confirmPassword) {
+      setError(t("Passwords do not match."));
+      toast.error(t("Passwords do not match."), {
         position: "top-right",
       });
+      setLoading(false);
       return;
     }
 
-    try {
-      if (!isLoaded) return;
-
-      await signUp.create({ emailAddress: email, password });
-      await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-
-      setSuccess("Check your email for a verification code.");
-      toast.success("Check your email for a verification code.", {
+    if (password.length < 6) {
+      setError(t("Password must be at least 6 characters long."));
+      toast.error(t("Password must be at least 6 characters long."), {
         position: "top-right",
       });
-      setStep("verify");
-    } catch (err) {
-      const msg = err.errors?.[0]?.longMessage || err.message || "Sign up failed";
-      setError(msg);
-      toast.error(msg, { position: "top-right" });
-    }
-  };
-
-  const handleVerify = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
-
-    if (!code) {
-      setError("Please enter the verification code.");
-      toast.error("Please enter the verification code.", {
-        position: "top-right",
-      });
+      setLoading(false);
       return;
     }
 
     try {
-      if (!isLoaded) return;
-
-      const result = await signUp.attemptEmailAddressVerification({ code });
-
-      if (result.status === "complete") {
-        setSuccess("Email verified successfully! You can now sign in.");
-        toast.success("Email verified successfully!", {
-          position: "top-right",
-        });
-        // Redirect to sign in after 2 seconds
-        setTimeout(() => {
-          window.location.href = "/SignIn";
-        }, 2000);
-      } else {
-        setError("Verification failed. Please try again.");
-        toast.error("Verification failed. Please try again.", {
-          position: "top-right",
-        });
+      // Check network connectivity first
+      if (!navigator.onLine) {
+        throw new Error(t("No internet connection. Please check your network."));
       }
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: window.location.origin + "/verify-email",
+        },
+      });
+
+      if (error) throw error;
+
+      setSuccess(t("Account created successfully! Please check your email for verification link."));
+      toast.success(t("Account created successfully! Please check your email for verification link."), {
+        position: "top-right",
+      });
+
+      // Clear form
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+      
+      // Redirect to sign in after 3 seconds
+      setTimeout(() => {
+        navigate("/signin");
+      }, 3000);
     } catch (err) {
-      const msg = err.errors?.[0]?.longMessage || err.message || "Verification failed";
-      setError(msg);
-      toast.error(msg, { position: "top-right" });
+      console.error("Sign up error:", err);
+      
+      let errorMessage = err.message || t("Sign up failed");
+      
+      // Handle specific error cases
+      if (err.message?.includes("Failed to fetch") || err.name === "AuthRetryableFetchError") {
+        errorMessage = t("Network error: Unable to connect to authentication service. Please check your internet connection and try again.");
+        console.error("Network error details:", {
+          message: err.message,
+          name: err.name,
+          stack: err.stack,
+          online: navigator.onLine,
+        });
+      } else if (err.message?.includes("User already registered")) {
+        errorMessage = t("An account with this email already exists. Please sign in instead.");
+      } else if (err.message?.includes("Password")) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
+      toast.error(errorMessage, { 
+        position: "top-right",
+        duration: err.message?.includes("Failed to fetch") ? 7000 : 5000,
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -125,74 +135,53 @@ export default function SignUp() {
             textShadow: "0 2px 4px rgba(0,0,0,0.15)",
           }}
         >
-          {step === "email" ? "Sign Up" : "Verify Email"}
+          {t("Create Account")}
         </h1>
 
-        {step === "email" ? (
-          <form
-            className="flex flex-col gap-3 w-full items-center"
-            onSubmit={handleSignUp}
+        <form
+          className="flex flex-col gap-3 w-full items-center"
+          onSubmit={handleSignUp}
+        >
+          <GlassInput
+            name="email"
+            type="email"
+            placeholder={t("Email")}
+            icon={Mail}
+            autoComplete="username"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <GlassInput
+            name="password"
+            type="password"
+            placeholder={t("Password (min. 6 characters)")}
+            icon={Lock}
+            autoComplete="new-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <GlassInput
+            name="confirmPassword"
+            type="password"
+            placeholder={t("Confirm Password")}
+            icon={Lock}
+            autoComplete="new-password"
+            required
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
+          <GlassButton
+            type="submit"
+            icon={UserPlus}
+            className="w-full mt-2"
+            variant="primary"
+            disabled={loading}
           >
-            <GlassInput
-              name="email"
-              type="email"
-              placeholder="Email"
-              icon={Mail}
-              autoComplete="username"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <GlassInput
-              name="password"
-              type="password"
-              placeholder="Password"
-              icon={Lock}
-              autoComplete="new-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            <div id="clerk-captcha"></div>
-            <GlassButton
-              type="submit"
-              icon={UserPlus}
-              className="w-full mt-2"
-              variant="primary"
-            >
-              Sign Up
-            </GlassButton>
-          </form>
-        ) : (
-          <form
-            className="flex flex-col gap-3 w-full items-center"
-            onSubmit={handleVerify}
-          >
-            <GlassInput
-              name="code"
-              type="text"
-              placeholder="Verification Code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              required
-            />
-            <GlassButton
-              type="submit"
-              icon={RefreshCcw}
-              className="w-full mt-2"
-              variant="primary"
-            >
-              Verify
-            </GlassButton>
-            <button
-              type="button"
-              onClick={() => setStep("email")}
-              className="text-white hover:text-[#FFD700] transition-colors font-medium text-sm"
-            >
-              Back to Sign Up
-            </button>
-          </form>
-        )}
+            {loading ? t("Creating Account...") : t("Sign Up")}
+          </GlassButton>
+        </form>
 
         {error && (
           <div className="text-red-300 text-sm mt-4 font-semibold">{error}</div>
@@ -207,29 +196,12 @@ export default function SignUp() {
           <div className="w-full border-t border-white/20 my-2"></div>
           {/* Back to Sign In link */}
           <div>
-            {(() => {
-              try {
-                // eslint-disable-next-line
-                const { Link } = require("react-router-dom");
-                return (
-                  <Link
-                    to="/SignIn"
-                    className="text-white hover:text-[#FFD700] transition-colors font-medium"
-                  >
-                    Already have an account? Sign In
-                  </Link>
-                );
-              } catch {
-                return (
-                  <a
-                    href="/SignIn"
-                    className="text-white hover:text-[#FFD700] transition-colors font-medium"
-                  >
-                    Already have an account? Sign In
-                  </a>
-                );
-              }
-            })()}
+            <button
+              onClick={() => navigate("/signin")}
+              className="text-white hover:text-[#FFD700] transition-colors font-medium"
+            >
+              {t("Already have an account? Sign In")}
+            </button>
           </div>
         </div>
       </section>

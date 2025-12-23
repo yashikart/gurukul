@@ -55,6 +55,16 @@ export const financialApiSlice = createApi({
       }),
       invalidatesTags: ["FinancialSimulation"],
     }),
+
+    // Create financial forecast
+    createFinancialForecast: builder.mutation({
+      query: (forecastData) => ({
+        url: "/forecast",
+        method: "POST",
+        body: forecastData,
+      }),
+      invalidatesTags: ["FinancialSimulation"],
+    }),
   }),
 });
 
@@ -67,4 +77,5 @@ export const {
   useGetSimulationRealTimeUpdatesQuery,
   useLazyGetSimulationRealTimeUpdatesQuery,
   useRunDirectSimulationMutation,
+  useCreateFinancialForecastMutation,
 } = financialApiSlice;

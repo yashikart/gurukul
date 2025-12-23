@@ -17,13 +17,13 @@ logger = logging.getLogger(__name__)
 class OllamaClient:
     """Client for interacting with Ollama local LLM models"""
     
-    def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3.2:3b"):
+    def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3.1:latest"):
         """
         Initialize Ollama client
         
         Args:
             base_url: Ollama server URL (default: http://localhost:11434)
-            model: Model name to use (default: llama3.2:3b)
+            model: Model name to use (default: llama3.1:latest)
         """
         self.base_url = base_url.rstrip('/')
         self.model = model
@@ -40,11 +40,17 @@ class OllamaClient:
                 models = response.json().get('models', [])
                 model_names = [m.get('name', '') for m in models]
                 
+                # Check if the preferred model is available, otherwise use the first available
                 if self.model in model_names:
                     logger.info(f"✅ Ollama connection successful. Model '{self.model}' is available.")
                     return True
+                elif model_names:
+                    # Use the first available model as fallback
+                    self.model = model_names[0]
+                    logger.info(f"✅ Ollama connection successful. Using available model: '{self.model}'")
+                    return True
                 else:
-                    logger.warning(f"⚠️  Model '{self.model}' not found. Available models: {model_names}")
+                    logger.warning("⚠️  No models found in Ollama")
                     return False
             else:
                 logger.error(f"❌ Ollama server responded with status {response.status_code}")
@@ -57,7 +63,7 @@ class OllamaClient:
             logger.error(f"❌ Error testing Ollama connection: {e}")
             return False
     
-    def generate_wellness_response(self, query: str, user_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def generate_wellness_response(self, query: str, user_context: Optional[Dict[str, Any]] = None, language: str = "english") -> Dict[str, Any]:
         """
         Generate a wellness response using Ollama
         
@@ -69,8 +75,8 @@ class OllamaClient:
             Dict containing response and metadata
         """
         try:
-            # Build the prompt with context
-            prompt = self._build_wellness_prompt(query, user_context)
+            # Build the prompt with context and language
+            prompt = self._build_wellness_prompt(query, user_context, language)
             
             # Make request to Ollama
             start_time = time.time()
@@ -93,7 +99,7 @@ class OllamaClient:
             logger.error(f"Error generating wellness response: {e}")
             return self._get_fallback_response(query)
     
-    def _build_wellness_prompt(self, query: str, user_context: Optional[Dict[str, Any]] = None) -> str:
+    def _build_wellness_prompt(self, query: str, user_context: Optional[Dict[str, Any]] = None, language: str = "english") -> str:
         """Build a comprehensive wellness prompt"""
         
         base_prompt = """You are a compassionate wellness counselor and mental health assistant. Your role is to provide supportive, practical, and empathetic guidance to help people manage stress, improve their well-being, and develop healthy coping strategies.
@@ -121,7 +127,13 @@ Guidelines for your responses:
             if context_info:
                 base_prompt += f"\nUser Context: {', '.join(context_info)}\n"
         
-        base_prompt += f"\nUser Query: {query}\n\nPlease provide a helpful wellness response:"
+        base_prompt += f"\nUser Query: {query}\n\n"
+        
+        # Add language instruction if Arabic is selected
+        if language.lower() == "arabic":
+            base_prompt += "LANGUAGE REQUIREMENT: Generate the ENTIRE response in Arabic (العربية). All content must be in Arabic using proper Arabic script and formatting.\n\n"
+        
+        base_prompt += "Please provide a helpful wellness response:"
         
         return base_prompt
     
