@@ -5,7 +5,7 @@
 
 import blobUrlManager from '../utils/blobUrlManager';
 
-const TTS_BASE_URL = import.meta.env.VITE_TTS_API_BASE_URL || 'http://localhost:8007';
+const TTS_BASE_URL = import.meta.env.VITE_TTS_API_BASE_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8007';
 
 class TTSService {
   constructor() {

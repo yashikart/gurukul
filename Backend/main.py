@@ -41,17 +41,41 @@ app = FastAPI(
 configure_cors(app)
 
 # Generic OPTIONS handler for preflight requests
-from fastapi import Response
+from fastapi import Response, Request
 
 @app.options("/{path:path}")
-async def preflight(path: str):
+async def preflight(path: str, request: Request):
+    """Handle CORS preflight requests with query parameters"""
+    # Get origin from request headers
+    origin = request.headers.get("origin", "*")
+    
+    # Check if origin is allowed
+    allowed_origins = [o.strip() for o in os.getenv('ALLOWED_ORIGINS', '').split(',') if o.strip()]
+    allow_regex = os.getenv('ALLOW_ORIGIN_REGEX', '')
+    
+    # Check regex pattern if provided
+    allowed = False
+    if allow_regex:
+        import re
+        if re.match(allow_regex.replace('.*', '.*'), origin):
+            allowed = True
+    
+    # Check exact match
+    if origin in allowed_origins or "*" in allowed_origins:
+        allowed = True
+    
+    # Default to allow if no restrictions
+    if not allowed_origins:
+        allowed = True
+    
     return Response(
         status_code=200,
         headers={
-            "Access-Control-Allow-Origin": os.getenv("NGROK_URL", "*"),
+            "Access-Control-Allow-Origin": origin if allowed else allowed_origins[0] if allowed_origins else "*",
             "Access-Control-Allow-Credentials": "true",
             "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-            "Access-Control-Allow-Headers": "*"
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Max-Age": "3600"
         }
     )
 
@@ -129,6 +153,24 @@ try:
     logger.info("✅ TTS Service mounted at /api/v1/tts")
 except Exception as e:
     logger.error(f"❌ Failed to mount TTS Service: {e}")
+
+try:
+    # Import Chatbot Service and include its router
+    from dedicated_chatbot_service.chatbot_api import app as chatbot_app
+    # Get the router from chatbot app and include it in main app
+    app.include_router(chatbot_app.router)
+    logger.info("✅ Chatbot Service router included (/chatpost, /chatbot, /chat-history)")
+except Exception as e:
+    logger.error(f"❌ Failed to include Chatbot Service router: {e}")
+    # Fallback: try importing endpoints directly
+    try:
+        from dedicated_chatbot_service.chatbot_api import receive_chat_message, get_chat_response, get_chat_history
+        app.post("/chatpost")(receive_chat_message)
+        app.get("/chatbot")(get_chat_response)
+        app.get("/chat-history")(get_chat_history)
+        logger.info("✅ Chatbot endpoints added directly")
+    except Exception as e2:
+        logger.error(f"❌ Failed to add chatbot endpoints directly: {e2}")
 
 if __name__ == "__main__":
     # Render provides PORT environment variable, use it if available

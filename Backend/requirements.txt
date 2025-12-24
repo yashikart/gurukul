@@ -65,6 +65,7 @@ opencv-python>=4.7.0
 pillow>=9.4.0
 easyocr>=1.7.0
 pytesseract>=0.3.10
+PyMuPDF>=1.23.0  # For PDF processing (fitz module)
 
 # Audio & TTS
 pyttsx3>=2.90
